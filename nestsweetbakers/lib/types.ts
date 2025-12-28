@@ -1,32 +1,27 @@
 export interface Cake {
-  id: string;
+  id?: string;
   name: string;
   description: string;
   basePrice: number;
-  imageUrl: string;
   category: string;
-  orderCount: number;
-  variants?: Array<{
-    size: string;
-    price: number;
-  }>;
+  imageUrl: string;
+  orderCount?: number;
+  createdAt?: string;
 }
 
 export interface Order {
-  id: string;
+  id?: string;
+  cakeName: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   deliveryAddress: string;
-  deliveryPincode: string;
-  items: Array<{
-    cakeId: string;
-    cakeName: string;
-    quantity: number;
-    price: number;
-  }>;
-  totalAmount: number;
-  status: 'pending' | 'confirmed' | 'baking' | 'out-for-delivery' | 'delivered';
-  paymentMethod: 'cod' | 'whatsapp';
+  deliveryDate: string;
+  weight: string;
+  flavor: string;
+  message?: string;
+  totalPrice: number;
+  status: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }

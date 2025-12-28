@@ -1,54 +1,87 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import Image from 'next/image';
-import OrderForm from '@/components/OrderForm';
-import { useParams } from 'next/navigation';
+import CakeCard from '@/components/CakeCard';
 import { Cake } from '@/lib/types';
 
-export default function CakeDetailPage() {
-  const params = useParams();
-  const [cake, setCake] = useState<Cake | null>(null);
+const CATEGORIES = ['All', 'Birthday', 'Wedding', 'Anniversary', 'Custom'];
+
+export default function CakesPage() {
+  const [cakes, setCakes] = useState<Cake[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
-    const fetchCake = async () => {
-      const docRef = doc(db, 'products', params.slug as string);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setCake({ id: docSnap.id, ...docSnap.data() } as Cake);
+    async function fetchCakes() {
+      try {
+        const querySnapshot = await getDocs(collection(db, 'products'));
+        const cakesData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Cake));
+        
+        setCakes(cakesData);
+      } catch (error) {
+        console.error('Error fetching cakes:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    };
-    fetchCake();
-  }, [params.slug]);
+    }
+    
+    fetchCakes();
+  }, []);
 
-  if (loading) return <div className="text-center py-8">Loading...</div>;
-  if (!cake) return <div className="text-center py-8">Cake not found</div>;
+  const filteredCakes = selectedCategory === 'All' 
+    ? cakes 
+    : cakes.filter(cake => cake.category === selectedCategory);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl">Loading cakes...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div>
-          <Image
-            src={cake.imageUrl}
-            alt={cake.name}
-            width={600}
-            height={400}
-            className="rounded-xl shadow-lg"
-          />
-        </div>
-        <div>
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">{cake.name}</h1>
-          <p className="text-gray-600 mb-6">{cake.description}</p>
-          <div className="mb-6">
-            <span className="text-3xl font-bold text-pink-600">₹{cake.basePrice}</span>
-          </div>
-          <OrderForm cake={cake} />
-        </div>
+      <h1 className="text-4xl font-bold text-center mb-8">Our Cakes</h1>
+      
+      {/* Category Filter */}
+      <div className="flex flex-wrap gap-2 justify-center mb-8">
+        {CATEGORIES.map((category) => (
+          <button
+            key={category}
+            onClick={() => setSelectedCategory(category)}
+            className={`px-6 py-2 rounded-full font-medium transition-colors ${
+              selectedCategory === category
+                ? 'bg-pink-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {category}
+          </button>
+        ))}
       </div>
+      
+      {/* Cakes Grid */}
+      {filteredCakes.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredCakes.map((cake) => (
+            <CakeCard key={cake.id} cake={cake} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">
+            {cakes.length === 0 
+              ? 'No cakes available yet. Check back soon!' 
+              : 'No cakes found in this category'}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
