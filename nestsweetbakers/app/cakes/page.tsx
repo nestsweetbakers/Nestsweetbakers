@@ -1,51 +1,56 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import CakeCard from '@/components/CakeCard';
-import CategoryFilter from '@/components/CategoryFilter';
+import Image from 'next/image';
+import OrderForm from '@/components/OrderForm';
+import { useParams } from 'next/navigation';
 import { Cake } from '@/lib/types';
 
-export default function CakesPage() {
-  const [cakes, setCakes] = useState<Cake[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+export default function CakeDetailPage() {
+  const params = useParams();
+  const slug = params.slug as string;
+  const [cake, setCake] = useState<Cake | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchCakes = async () => {
-      const snapshot = await getDocs(collection(db, 'products'));
-      const cakeList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cake));
-      setCakes(cakeList);
-      
-      const cats = ['All', ...new Set(cakeList.map(cake => cake.category))];
-      setCategories(cats);
+    const fetchCake = async () => {
+      const docRef = doc(db, 'products', slug);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        setCake({ id: docSnap.id, ...docSnap.data() } as Cake);
+      }
+      setLoading(false);
     };
-    fetchCakes();
-  }, []);
+    fetchCake();
+  }, [slug]);
 
-  // Use useMemo instead of useEffect to avoid cascading renders
-  const filteredCakes = useMemo(() => {
-    if (selectedCategory === 'All') {
-      return cakes;
-    }
-    return cakes.filter(cake => cake.category === selectedCategory);
-  }, [selectedCategory, cakes]);
+  if (loading) return <div className="text-center py-8">Loading...</div>;
+  if (!cake) return <div className="text-center py-8">Cake not found</div>;
+
+  const imageUrl = cake.imageUrl || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600';
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-4xl font-bold text-gray-800 mb-8">Our Cakes</h1>
-      
-      <CategoryFilter
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onCategoryChange={setSelectedCategory}
-      />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-        {filteredCakes.map((cake: Cake) => (
-          <CakeCard key={cake.id} cake={cake} />
-        ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div>
+          <Image
+            src={imageUrl}
+            alt={cake.name}
+            width={600}
+            height={400}
+            className="rounded-xl shadow-lg"
+          />
+        </div>
+        <div>
+          <h1 className="text-4xl font-bold text-gray-800 mb-4">{cake.name}</h1>
+          <p className="text-gray-600 mb-6">{cake.description}</p>
+          <div className="mb-6">
+            <span className="text-3xl font-bold text-pink-600">₹{cake.basePrice}</span>
+          </div>
+          <OrderForm cake={cake} />
+        </div>
       </div>
     </div>
   );

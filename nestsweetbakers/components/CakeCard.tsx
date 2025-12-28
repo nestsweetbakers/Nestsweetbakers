@@ -9,11 +9,14 @@ interface Props {
 }
 
 export default function CakeCard({ cake }: Props) {
+  // Use placeholder if imageUrl is empty
+  const imageUrl = cake.imageUrl || 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=500';
+  
   return (
     <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-shadow overflow-hidden">
       <div className="relative h-48">
         <Image
-          src={cake.imageUrl}
+          src={imageUrl}
           alt={cake.name}
           fill
           className="object-cover"
