@@ -1,258 +1,245 @@
 'use client';
 
-export const dynamic = 'force-dynamic';
-
-import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Plus, Edit, Trash2, Check, X, Star } from 'lucide-react';
+import { Plus, Edit, Trash2, CheckCircle, XCircle, Search } from 'lucide-react';
 import Image from 'next/image';
 
-interface Testimonial {
-  id?: string;
-  customerName: string;
-  customerImage?: string;
-  rating: number;
-  comment: string;
-  cakeName?: string;
-  approved: boolean;
-  featured: boolean;
-  createdAt: string;
-}
-
-export default function TestimonialsManagement() {
-  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+export default function TestimonialsPage() {
+  const [testimonials, setTestimonials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<Testimonial>({
-    customerName: '',
-    customerImage: '',
+  const [editingTestimonial, setEditingTestimonial] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    role: '',
+    content: '',
     rating: 5,
-    comment: '',
-    cakeName: '',
-    approved: true,
-    featured: false,
-    createdAt: new Date().toISOString(),
+    imageUrl: '',
+    approved: false,
   });
 
   useEffect(() => {
     fetchTestimonials();
   }, []);
 
-  async function fetchTestimonials() {
+  const fetchTestimonials = async () => {
     try {
       const testimonialsSnap = await getDocs(collection(db, 'testimonials'));
-      const testimonialsData = testimonialsSnap.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Testimonial[];
-      
-      setTestimonials(testimonialsData.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      ));
+      const testimonialsData = testimonialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTestimonials(testimonialsData);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching testimonials:', error);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     try {
-      if (editingId) {
-       await updateDoc(doc(db, 'testimonials', editingId), {
-  customerName: formData.customerName,
-  customerImage: formData.customerImage,
-  rating: formData.rating,
-  comment: formData.comment,
-  cakeName: formData.cakeName,
-  approved: formData.approved,
-  featured: formData.featured,
-});
-        setTestimonials(testimonials.map(t => 
-          t.id === editingId ? { ...formData, id: editingId } : t
-        ));
-        alert('Testimonial updated!');
-      } else {
-        const docRef = await addDoc(collection(db, 'testimonials'), {
+      if (editingTestimonial) {
+        await updateDoc(doc(db, 'testimonials', editingTestimonial.id), {
           ...formData,
-          createdAt: new Date().toISOString(),
+          updatedAt: serverTimestamp(),
         });
-        setTestimonials([{ ...formData, id: docRef.id, createdAt: new Date().toISOString() }, ...testimonials]);
-        alert('Testimonial added!');
+        alert('Testimonial updated successfully');
+      } else {
+        await addDoc(collection(db, 'testimonials'), {
+          ...formData,
+          createdAt: serverTimestamp(),
+        });
+        alert('Testimonial created successfully');
       }
-
+      
       resetForm();
+      fetchTestimonials();
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error saving testimonial:', error);
       alert('Failed to save testimonial');
     }
-  }
+  };
 
-  async function deleteTestimonial(id: string) {
-    if (!confirm('Delete this testimonial?')) return;
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this testimonial?')) return;
 
     try {
       await deleteDoc(doc(db, 'testimonials', id));
       setTestimonials(testimonials.filter(t => t.id !== id));
+      alert('Testimonial deleted successfully');
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error deleting testimonial:', error);
       alert('Failed to delete testimonial');
     }
-  }
+  };
 
-  async function toggleApproval(id: string, currentStatus: boolean) {
+  const toggleApproval = async (id: string, currentStatus: boolean) => {
     try {
-      await updateDoc(doc(db, 'testimonials', id), { approved: !currentStatus });
-      setTestimonials(testimonials.map(t => 
-        t.id === id ? { ...t, approved: !currentStatus } : t
-      ));
+      await updateDoc(doc(db, 'testimonials', id), {
+        approved: !currentStatus,
+        updatedAt: serverTimestamp(),
+      });
+      fetchTestimonials();
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error toggling approval:', error);
     }
-  }
+  };
 
-  async function toggleFeatured(id: string, currentStatus: boolean) {
-    try {
-      await updateDoc(doc(db, 'testimonials', id), { featured: !currentStatus });
-      setTestimonials(testimonials.map(t => 
-        t.id === id ? { ...t, featured: !currentStatus } : t
-      ));
-    } catch (error) {
-      console.error('Error:', error);
-    }
-  }
-
-  function editTestimonial(testimonial: Testimonial) {
-    setFormData(testimonial);
-    setEditingId(testimonial.id || null);
-    setShowForm(true);
-  }
-
-  function resetForm() {
+  const resetForm = () => {
     setFormData({
-      customerName: '',
-      customerImage: '',
+      name: '',
+      role: '',
+      content: '',
       rating: 5,
-      comment: '',
-      cakeName: '',
-      approved: true,
-      featured: false,
-      createdAt: new Date().toISOString(),
+      imageUrl: '',
+      approved: false,
     });
-    setEditingId(null);
+    setEditingTestimonial(null);
     setShowForm(false);
-  }
+  };
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  const startEdit = (testimonial: any) => {
+    setFormData(testimonial);
+    setEditingTestimonial(testimonial);
+    setShowForm(true);
+  };
+
+  const filteredTestimonials = testimonials.filter(testimonial =>
+    testimonial.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    testimonial.content?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-pink-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="p-4 md:p-8">
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold">Testimonials Management</h1>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">Testimonials</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage customer testimonials</p>
+        </div>
         <button
-          onClick={() => setShowForm(true)}
-          className="bg-pink-600 text-white px-6 py-3 rounded-lg hover:bg-pink-700 transition flex items-center gap-2 font-semibold"
+          onClick={() => setShowForm(!showForm)}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl hover:from-pink-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg font-semibold text-sm sm:text-base"
         >
           <Plus size={20} />
-          Add Testimonial
+          {showForm ? 'Cancel' : 'Add Testimonial'}
         </button>
+      </div>
+
+      {/* Search */}
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-3 sm:p-4">
+        <div className="relative">
+          <Search className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+          <input
+            type="text"
+            placeholder="Search testimonials..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 sm:pl-12 pr-4 py-2.5 sm:py-3 border-2 border-gray-200 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all text-sm sm:text-base"
+          />
+        </div>
       </div>
 
       {/* Form */}
       {showForm && (
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-8">
-          <h2 className="text-xl font-bold mb-4">
-            {editingId ? 'Edit Testimonial' : 'Add New Testimonial'}
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">
+            {editingTestimonial ? 'Edit Testimonial' : 'New Testimonial'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input
-                type="text"
-                placeholder="Customer Name"
-                required
-                value={formData.customerName}
-                onChange={e => setFormData({...formData, customerName: e.target.value})}
-                className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:outline-none"
-              />
-              <input
-                type="url"
-                placeholder="Customer Image URL (optional)"
-                value={formData.customerImage}
-                onChange={e => setFormData({...formData, customerImage: e.target.value})}
-                className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:outline-none"
-              />
-              <input
-                type="text"
-                placeholder="Cake Name (optional)"
-                value={formData.cakeName}
-                onChange={e => setFormData({...formData, cakeName: e.target.value})}
-                className="px-4 py-3 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:outline-none"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-2">Rating</label>
-                <div className="flex gap-2">
-                  {[1,2,3,4,5].map(star => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setFormData({...formData, rating: star})}
-                      className="transition-transform hover:scale-110"
-                    >
-                      <Star
-                        size={32}
-                        className={star <= formData.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
-                      />
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  required
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all text-sm sm:text-base"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Role/Title</label>
+                <input
+                  type="text"
+                  value={formData.role}
+                  onChange={(e) => setFormData({...formData, role: e.target.value})}
+                  placeholder="Customer, Baker, etc."
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all text-sm sm:text-base"
+                />
               </div>
             </div>
 
-            <textarea
-              placeholder="Testimonial Comment"
-              required
-              value={formData.comment}
-              onChange={e => setFormData({...formData, comment: e.target.value})}
-              rows={4}
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-pink-500 focus:outline-none resize-none"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Content</label>
+              <textarea
+                value={formData.content}
+                onChange={(e) => setFormData({...formData, content: e.target.value})}
+                required
+                rows={4}
+                className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all text-sm sm:text-base resize-none"
+              />
+            </div>
 
-            <div className="flex gap-6">
-              <label className="flex items-center gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Image URL (Optional)</label>
                 <input
-                  type="checkbox"
-                  checked={formData.approved}
-                  onChange={e => setFormData({...formData, approved: e.target.checked})}
-                  className="w-5 h-5 text-pink-600"
+                  type="url"
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                  placeholder="https://example.com/photo.jpg"
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all text-sm sm:text-base"
                 />
-                <span className="font-medium">Approved</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={formData.featured}
-                  onChange={e => setFormData({...formData, featured: e.target.checked})}
-                  className="w-5 h-5 text-pink-600"
-                />
-                <span className="font-medium">Featured</span>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+                <select
+                  value={formData.rating}
+                  onChange={(e) => setFormData({...formData, rating: parseInt(e.target.value)})}
+                  className="w-full px-4 py-2.5 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all text-sm sm:text-base"
+                >
+                  {[5, 4, 3, 2, 1].map(num => (
+                    <option key={num} value={num}>{'⭐'.repeat(num)} ({num} Stars)</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="approved"
+                checked={formData.approved}
+                onChange={(e) => setFormData({...formData, approved: e.target.checked})}
+                className="rounded text-pink-600 focus:ring-pink-500"
+              />
+              <label htmlFor="approved" className="text-sm font-medium text-gray-700">
+                Approved for display
               </label>
             </div>
 
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-3">
               <button
                 type="submit"
-                className="bg-pink-600 text-white px-6 py-3 rounded-lg hover:bg-pink-700 transition font-semibold"
+                className="flex-1 bg-gradient-to-r from-pink-600 to-purple-600 text-white py-2.5 sm:py-3 rounded-lg hover:from-pink-700 hover:to-purple-700 transition-all font-semibold text-sm sm:text-base"
               >
-                {editingId ? 'Update' : 'Add'} Testimonial
+                {editingTestimonial ? 'Update Testimonial' : 'Create Testimonial'}
               </button>
               <button
                 type="button"
                 onClick={resetForm}
-                className="bg-gray-200 text-gray-700 px-6 py-3 rounded-lg hover:bg-gray-300 transition font-semibold"
+                className="flex-1 bg-gray-200 text-gray-700 py-2.5 sm:py-3 rounded-lg hover:bg-gray-300 transition-all font-semibold text-sm sm:text-base"
               >
                 Cancel
               </button>
@@ -261,111 +248,69 @@ export default function TestimonialsManagement() {
         </div>
       )}
 
-      {/* Testimonials Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {testimonials.map((testimonial) => (
-          <div key={testimonial.id} className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                {testimonial.customerImage ? (
-                  <div className="relative w-12 h-12 rounded-full overflow-hidden">
+      {/* Testimonials List */}
+      {filteredTestimonials.length === 0 ? (
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-8 sm:p-12 text-center">
+          <p className="text-gray-500 text-sm sm:text-lg">No testimonials yet</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          {filteredTestimonials.map((testimonial) => (
+            <div key={testimonial.id} className="bg-white rounded-xl sm:rounded-2xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-all">
+              <div className="flex items-start gap-3 sm:gap-4 mb-4">
+                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-lg sm:text-xl flex-shrink-0 overflow-hidden">
+                  {testimonial.imageUrl ? (
                     <Image
-                      src={testimonial.customerImage}
-                      alt={testimonial.customerName}
-                      fill
-                      className="object-cover"
-                      sizes="48px"
+                      src={testimonial.imageUrl}
+                      alt={testimonial.name}
+                      width={64}
+                      height={64}
+                      className="w-full h-full object-cover"
                     />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 bg-pink-600 rounded-full flex items-center justify-center text-white font-bold">
-                    {testimonial.customerName.charAt(0)}
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-bold">{testimonial.customerName}</h3>
-                  {testimonial.cakeName && (
-                    <p className="text-xs text-gray-500">{testimonial.cakeName}</p>
+                  ) : (
+                    testimonial.name?.charAt(0) || 'T'
                   )}
                 </div>
-              </div>
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    size={14}
-                    className={i < testimonial.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <p className="text-sm text-gray-700 mb-4 leading-relaxed">
-              &quot;{testimonial.comment}&quot;
-            </p>
-
-            <div className="flex items-center gap-2 mb-4">
-              {testimonial.approved && (
-                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full font-medium">
-                  Approved
-                </span>
-              )}
-              {testimonial.featured && (
-                <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full font-medium">
-                  ⭐ Featured
-                </span>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t">
-              <div className="flex gap-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-base sm:text-lg text-gray-800 truncate">{testimonial.name}</h3>
+                  {testimonial.role && (
+                    <p className="text-xs sm:text-sm text-gray-600 truncate">{testimonial.role}</p>
+                  )}
+                  <div className="flex items-center gap-1 mt-1">
+                    {'⭐'.repeat(testimonial.rating || 5)}
+                  </div>
+                </div>
                 <button
-                  onClick={() => toggleApproval(testimonial.id!, testimonial.approved)}
-                  className={`p-2 rounded transition ${
-                    testimonial.approved 
-                      ? 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200' 
-                      : 'bg-green-100 text-green-600 hover:bg-green-200'
+                  onClick={() => toggleApproval(testimonial.id, testimonial.approved)}
+                  className={`p-2 rounded-lg transition-colors ${
+                    testimonial.approved ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
                   }`}
-                  title={testimonial.approved ? 'Unapprove' : 'Approve'}
+                  title={testimonial.approved ? 'Approved' : 'Not Approved'}
                 >
-                  {testimonial.approved ? <X size={16} /> : <Check size={16} />}
-                </button>
-                <button
-                  onClick={() => toggleFeatured(testimonial.id!, testimonial.featured)}
-                  className={`p-2 rounded transition ${
-                    testimonial.featured 
-                      ? 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200' 
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                  title={testimonial.featured ? 'Unfeature' : 'Feature'}
-                >
-                  <Star size={16} className={testimonial.featured ? 'fill-current' : ''} />
+                  {testimonial.approved ? <CheckCircle size={20} /> : <XCircle size={20} />}
                 </button>
               </div>
-              <div className="flex gap-2">
+
+              <p className="text-gray-700 text-sm sm:text-base mb-4 line-clamp-4">{testimonial.content}</p>
+
+              <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t">
                 <button
-                  onClick={() => editTestimonial(testimonial)}
-                  className="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition"
-                  title="Edit"
+                  onClick={() => startEdit(testimonial)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-2 rounded-lg hover:bg-blue-100 transition-colors font-medium text-sm"
                 >
                   <Edit size={16} />
+                  Edit
                 </button>
                 <button
-                  onClick={() => deleteTestimonial(testimonial.id!)}
-                  className="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
-                  title="Delete"
+                  onClick={() => handleDelete(testimonial.id)}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-600 py-2 rounded-lg hover:bg-red-100 transition-colors font-medium text-sm"
                 >
                   <Trash2 size={16} />
+                  Delete
                 </button>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {testimonials.length === 0 && (
-        <div className="text-center py-12 text-gray-500 bg-white rounded-lg">
-          No testimonials yet
+          ))}
         </div>
       )}
     </div>
