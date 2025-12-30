@@ -12,15 +12,16 @@ import {
   Edit, 
   Trash2, 
   Search, 
-  Filter, 
   Package, 
   DollarSign, 
   Tag,
   Image as ImageIcon,
   X,
-  TrendingUp
+  TrendingUp,
+  Images
 } from 'lucide-react';
 import Image from 'next/image';
+import ImageUpload from '@/components/ImageUpload';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Cake[]>([]);
@@ -40,9 +41,10 @@ export default function AdminProducts() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    basePrice: 0,
+    basePrice: '' as string | number,
     category: '',
-    imageUrl: ''
+    imageUrl: '',
+    images: [] as string[]
   });
 
   const fetchProducts = useCallback(async () => {
@@ -67,12 +69,10 @@ export default function AdminProducts() {
   useEffect(() => {
     let result = [...products];
 
-    // Category filter
     if (categoryFilter !== 'all') {
       result = result.filter(product => product.category === categoryFilter);
     }
 
-    // Search filter
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
       result = result.filter(product =>
@@ -88,28 +88,39 @@ export default function AdminProducts() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     
-    if (!formData.name || !formData.description || formData.basePrice <= 0 || !formData.category || !formData.imageUrl) {
-      showError('❌ Please fill all required fields');
+    const price = typeof formData.basePrice === 'string' ? parseFloat(formData.basePrice) : formData.basePrice;
+    
+    if (!formData.name || !formData.description || !price || price <= 0 || !formData.category || !formData.imageUrl) {
+      showError('❌ Please fill all required fields correctly');
       return;
     }
+
+    const productData = {
+      name: formData.name,
+      description: formData.description,
+      basePrice: price,
+      category: formData.category,
+      imageUrl: formData.imageUrl,
+      images: formData.images || [],
+    };
 
     try {
       if (editingProduct?.id) {
         await updateDoc(doc(db, 'products', editingProduct.id), {
-          ...formData,
+          ...productData,
           updatedAt: serverTimestamp()
         });
         setProducts(products.map(p => 
-          p.id === editingProduct.id ? { ...p, ...formData } : p
+          p.id === editingProduct.id ? { ...p, ...productData } : p
         ));
         showSuccess('✅ Product updated successfully');
       } else {
         const docRef = await addDoc(collection(db, 'products'), {
-          ...formData,
+          ...productData,
           orderCount: 0,
           createdAt: serverTimestamp()
         });
-        setProducts([{ id: docRef.id, ...formData, orderCount: 0 } as Cake, ...products]);
+        setProducts([{ id: docRef.id, ...productData, orderCount: 0 } as Cake, ...products]);
         showSuccess('✅ Product added successfully');
       }
       
@@ -136,9 +147,10 @@ export default function AdminProducts() {
     setFormData({
       name: '',
       description: '',
-      basePrice: 0,
+      basePrice: '',
       category: '',
-      imageUrl: ''
+      imageUrl: '',
+      images: []
     });
     setEditingProduct(null);
     setShowForm(false);
@@ -149,9 +161,10 @@ export default function AdminProducts() {
     setFormData({
       name: product.name || '',
       description: product.description || '',
-      basePrice: product.basePrice || 0,
+      basePrice: product.basePrice || '',
       category: product.category || '',
-      imageUrl: product.imageUrl || ''
+      imageUrl: product.imageUrl || '',
+      images: product.images || []
     });
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -223,8 +236,11 @@ export default function AdminProducts() {
         </div>
         <button
           onClick={() => {
-            setShowForm(!showForm);
-            if (showForm) resetForm();
+            if (showForm) {
+              resetForm();
+            } else {
+              setShowForm(true);
+            }
           }}
           className="flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white px-6 py-3 rounded-xl hover:from-pink-700 hover:to-purple-700 transition-all transform hover:scale-105 shadow-lg font-semibold"
         >
@@ -260,7 +276,7 @@ export default function AdminProducts() {
             {editingProduct ? (
               <>
                 <Edit size={24} className="text-pink-600" />
-                Edit Product
+                Edit Product: {editingProduct.name}
               </>
             ) : (
               <>
@@ -269,7 +285,23 @@ export default function AdminProducts() {
               </>
             )}
           </h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Image Upload */}
+            <ImageUpload
+              value={[formData.imageUrl, ...formData.images].filter(Boolean)}
+              onChange={(urls) => {
+                const urlArray = Array.isArray(urls) ? urls : [urls];
+                setFormData({
+                  ...formData,
+                  imageUrl: urlArray[0] || '',
+                  images: urlArray.slice(1, 5)
+                });
+              }}
+              multiple
+              maxImages={5}
+              label="Product Images (1 main + up to 4 additional) *"
+            />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -318,51 +350,21 @@ export default function AdminProducts() {
               />
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                  <DollarSign size={16} />
-                  Base Price (₹) *
-                </label>
-                <input
-                  type="number"
-                  placeholder="500"
-                  required
-                  min="1"
-                  value={formData.basePrice || ''}
-                  onChange={e => setFormData({...formData, basePrice: Number(e.target.value)})}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                  <ImageIcon size={16} />
-                  Image URL *
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://example.com/image.jpg"
-                  required
-                  value={formData.imageUrl || ''}
-                  onChange={e => setFormData({...formData, imageUrl: e.target.value})}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-                />
-              </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <DollarSign size={16} />
+                Base Price (₹) *
+              </label>
+              <input
+                type="number"
+                placeholder="500"
+                required
+                min="1"
+                value={formData.basePrice}
+                onChange={e => setFormData({...formData, basePrice: e.target.value})}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+              />
             </div>
-
-            {/* Image Preview */}
-            {formData.imageUrl && (
-              <div className="relative w-full h-48 rounded-xl overflow-hidden border-2 border-gray-200">
-                <Image
-                  src={formData.imageUrl}
-                  alt="Preview"
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                />
-              </div>
-            )}
             
             <div className="flex gap-4 pt-4">
               <button
@@ -438,6 +440,14 @@ export default function AdminProducts() {
                     {product.category}
                   </span>
                 </div>
+                {product.images && product.images.length > 0 && (
+                  <div className="absolute bottom-3 left-3">
+                    <span className="px-2 py-1 bg-purple-600 text-white rounded-full text-xs font-bold flex items-center gap-1">
+                      <Images size={12} />
+                      +{product.images.length}
+                    </span>
+                  </div>
+                )}
               </div>
               
               <div className="p-5">
