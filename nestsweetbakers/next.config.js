@@ -27,7 +27,13 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'avatars.githubusercontent.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+      },
     ],
+    // Allow unoptimized images for development
+    unoptimized: process.env.NODE_ENV === 'development',
   },
   // Suppress React DevTools warning in production
   compiler: {

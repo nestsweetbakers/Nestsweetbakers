@@ -5,7 +5,8 @@ export interface Cake {
   description: string;
   basePrice: number;
   category: string;
-  imageUrl: string;
+   imageUrl: string; // Main image
+  images?: string[]; // Additional images (max 5)
   rating: number;
   reviewCount: number;
   orderCount?: number;
