@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
+import ClientLayout from "@/components/ClientLayout"
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
 
@@ -26,9 +25,7 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning>
         <AuthProvider>
           <CartProvider>
-            <Header />
-            <main className="min-h-screen">{children}</main>
-            <Footer />
+            <ClientLayout>{children}</ClientLayout>
           </CartProvider>
         </AuthProvider>
       </body>
