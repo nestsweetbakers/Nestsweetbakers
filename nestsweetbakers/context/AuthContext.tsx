@@ -34,21 +34,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Mark component as mounted
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Check if user is admin or superAdmin
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const checkAdminStatus = async (uid: string) => {
+    if (!mounted) return; // ✅ Don't update state if not mounted
+
     try {
       const [adminDoc, superAdminDoc] = await Promise.all([
         getDoc(doc(db, 'admins', uid)),
         getDoc(doc(db, 'superAdmins', uid))
       ]);
 
-      setIsSuperAdmin(superAdminDoc.exists());
-      setIsAdmin(adminDoc.exists() || superAdminDoc.exists());
+      if (mounted) { // ✅ Check again before setState
+        setIsSuperAdmin(superAdminDoc.exists());
+        setIsAdmin(adminDoc.exists() || superAdminDoc.exists());
+      }
     } catch (error) {
       console.error('Error checking admin status:', error);
-      setIsAdmin(false);
-      setIsSuperAdmin(false);
+      if (mounted) {
+        setIsAdmin(false);
+        setIsSuperAdmin(false);
+      }
     }
   };
 
@@ -81,27 +94,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+    const unsubscribe = onAuthStateChanged(
+      auth, 
+      async (currentUser) => {
+        if (!mounted) return; // ✅ Don't update if not mounted
 
-      if (currentUser) {
-        await Promise.all([
-          checkAdminStatus(currentUser.uid),
-          ensureUserProfile(currentUser)
-        ]);
-      } else {
-        setIsAdmin(false);
-        setIsSuperAdmin(false);
+        setUser(currentUser);
+
+        if (currentUser) {
+          // Run async operations without blocking
+          Promise.all([
+            checkAdminStatus(currentUser.uid),
+            ensureUserProfile(currentUser)
+          ]).catch(err => {
+            console.error('Error in auth setup:', err);
+          });
+        } else {
+          if (mounted) {
+            setIsAdmin(false);
+            setIsSuperAdmin(false);
+          }
+        }
+
+        if (mounted) {
+          setLoading(false);
+        }
+      }, 
+      (error) => {
+        console.error('Auth state change error:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
+    );
 
-      setLoading(false);
-    }, (error) => {
-      console.error('Auth state change error:', error);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      unsubscribe();
+    };
+  }, [checkAdminStatus, mounted]); // ✅ Depend on mounted state
 
   const signIn = async () => {
     if (typeof window === 'undefined') return;
@@ -135,7 +165,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       
-      // Update display name
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: name });
       }
@@ -161,12 +190,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       await firebaseSignOut(auth);
-      setIsAdmin(false);
-      setIsSuperAdmin(false);
+      if (mounted) {
+        setIsAdmin(false);
+        setIsSuperAdmin(false);
+      }
     } catch (error) {
       console.error('Sign out error:', error);
     }
   };
+
+  // Don't render children until mounted to prevent hydration issues
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <AuthContext.Provider value={{ 
