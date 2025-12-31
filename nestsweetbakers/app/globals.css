@@ -113,8 +113,16 @@ body {
 }
 
 /* Smooth Scrolling */
-html {
+/* Remove or comment out */
+/* html {
   scroll-behavior: smooth;
+} */
+
+/* Add instead */
+@layer base {
+  html[data-scroll-behavior="smooth"] {
+    scroll-behavior: smooth;
+  }
 }
 
 /* Custom Scrollbar */

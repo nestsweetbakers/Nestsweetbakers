@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/context/ToastContext';
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -423,31 +423,36 @@ export default function CartPage() {
   };
 
   const handleSaveInfo = async () => {
-    if (!customerInfo.name || !customerInfo.phone || !customerInfo.address || !customerInfo.pincode) {
-      showError('Please fill in all required fields');
-      return;
-    }
+  if (!customerInfo.name || !customerInfo.phone || !customerInfo.address || !customerInfo.pincode) {
+    showError('Please fill in all required fields');
+    return;
+  }
 
-    try {
-      if (user) {
-        await updateDoc(doc(db, 'userProfiles', user.uid), {
-          displayName: customerInfo.name,
-          phone: customerInfo.phone,
-          address: customerInfo.address,
-          city: customerInfo.city,
-          state: customerInfo.state,
-          pincode: customerInfo.pincode,
-          updatedAt: serverTimestamp(),
-        });
-        showSuccess('Profile saved successfully!');
-      }
-      setIsEditingInfo(false);
-    } catch (error) {
-      console.error('Error saving profile:', error);
-      showInfo('Profile info saved locally');
-      setIsEditingInfo(false);
+  try {
+    if (user) {
+      // ✅ Use setDoc with merge: true instead of updateDoc
+      await setDoc(doc(db, 'userProfiles', user.uid), {
+        displayName: customerInfo.name,
+        phone: customerInfo.phone,
+        email: customerInfo.email || user.email || '',
+        address: customerInfo.address,
+        city: customerInfo.city,
+        state: customerInfo.state,
+        pincode: customerInfo.pincode,
+        updatedAt: serverTimestamp(),
+      }, { merge: true }); // ✅ This creates the document if it doesn't exist
+      
+      showSuccess('Profile saved successfully!');
     }
-  };
+    setIsEditingInfo(false);
+  } catch (error) {
+    console.error('Error saving profile:', error);
+    showError('Failed to save profile. Please try again.');
+    // Still allow user to continue with order
+    setIsEditingInfo(false);
+  }
+};
+
 
   if (loadingProfile) {
     return (
