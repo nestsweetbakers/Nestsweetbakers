@@ -6,7 +6,7 @@ import {
   ShoppingCart, Search, User, X, ChevronDown, Heart, Shield, 
   LayoutDashboard, Bell, Menu, Package, Settings, Users, 
   BarChart3, MessageSquare, LogOut, Home, Cake,
-  Gift, Info, Phone, Wrench, Sparkles
+  Gift, Info, Phone, Wrench, Sparkles, MapPin, CheckSquare
 } from 'lucide-react';
 import { useCart } from '@/context/CartContext';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +33,6 @@ export default function Header() {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       
-      // Hide header when scrolling down past 100px, show when scrolling up
       if (currentScrollY > lastScrollY && currentScrollY > 100) {
         setHeaderVisible(false);
       } else {
@@ -84,7 +83,7 @@ export default function Header() {
   const navLinks = [
     { href: '/', label: 'Home', icon: Home },
     { href: '/cakes', label: 'Cakes', icon: Cake },
-    { href: '/custom-cakes', label: 'Custom Cakes', icon: Gift },
+    { href: '/custom-cakes', label: 'Custom', icon: Gift },
     { href: '/about', label: 'About', icon: Info },
     { href: '/services', label: 'Services', icon: Wrench },
     { href: '/contact', label: 'Contact', icon: Phone },
@@ -107,6 +106,11 @@ export default function Header() {
     { href: '/orders', label: 'My Orders', icon: Package },
     { href: '/wishlist', label: 'Wishlist', icon: Heart },
     { href: '/notifications', label: 'Notifications', icon: Bell, badge: unreadCount },
+  ];
+
+  const quickLinks = [
+    { href: '/track-order', label: 'Track Order', icon: MapPin },
+    { href: '/claim-order', label: 'Claim Order', icon: CheckSquare, authOnly: true },
   ];
 
   const handleSignOut = async () => {
@@ -136,31 +140,31 @@ export default function Header() {
           headerVisible ? 'translate-y-0' : '-translate-y-full'
         } ${
           scrolled 
-            ? 'bg-white/95 backdrop-blur-lg shadow-2xl py-2' 
-            : 'bg-white shadow-md py-3'
+            ? 'bg-white/95 backdrop-blur-lg shadow-2xl py-1.5' 
+            : 'bg-white shadow-md py-2'
         }`}
       >
-        <div className="container mx-auto px-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4">
           <div className="flex items-center justify-between">
-            {/* Logo */}
-            <Link href="/" className="flex items-center space-x-2 group relative z-10">
-              <div className={`transition-all duration-500 ${scrolled ? 'text-3xl' : 'text-4xl'}`}>
-                <span className="inline-block group-hover:scale-125 group-hover:rotate-12 transition-all duration-300">
+            {/* Logo - Compact */}
+            <Link href="/" className="flex items-center space-x-1.5 group relative z-10">
+              <div className={`transition-all duration-500 ${scrolled ? 'text-2xl' : 'text-3xl'}`}>
+                <span className="inline-block group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
                   🍰
                 </span>
               </div>
               <div className="overflow-hidden">
-                <span className={`font-bold text-pink-600 group-hover:text-pink-700 transition-all duration-300 inline-block group-hover:translate-x-1 ${
-                  scrolled ? 'text-xl' : 'text-2xl'
+                <span className={`font-bold text-pink-600 group-hover:text-pink-700 transition-all duration-300 inline-block group-hover:translate-x-0.5 ${
+                  scrolled ? 'text-lg' : 'text-xl'
                 }`}>
                   NestSweets
                 </span>
               </div>
             </Link>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden lg:flex items-center space-x-1">
-              {navLinks.map((link, index) => {
+            {/* Desktop Navigation - Compact */}
+            <nav className="hidden lg:flex items-center space-x-0.5 xl:space-x-1">
+              {navLinks.map((link) => {
                 const Icon = link.icon;
                 const isActive = isActivePath(link.href);
                 
@@ -168,13 +172,13 @@ export default function Header() {
                   <Link
                     key={link.href}
                     href={link.href}
-                    className={`relative px-4 py-2 font-medium transition-all duration-300 group overflow-hidden rounded-lg flex items-center gap-2 ${
+                    className={`relative px-2.5 xl:px-3 py-1.5 text-sm font-medium transition-all duration-300 group overflow-hidden rounded-lg flex items-center gap-1.5 ${
                       isActive 
                         ? 'text-pink-600 bg-pink-50' 
                         : 'text-gray-700 hover:text-pink-600'
                     }`}
                   >
-                    <Icon size={18} className="transition-transform group-hover:scale-110" />
+                    <Icon size={16} className="transition-transform group-hover:scale-110" />
                     <span className="relative z-10">{link.label}</span>
                     {!isActive && (
                       <span className="absolute inset-0 bg-pink-50 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left rounded-lg"></span>
@@ -184,29 +188,39 @@ export default function Header() {
               })}
             </nav>
 
-            {/* Right Actions */}
-            <div className="flex items-center space-x-2">
+            {/* Right Actions - Compact */}
+            <div className="flex items-center space-x-1">
               {/* Search */}
               <button
                 onClick={() => setSearchOpen(!searchOpen)}
-                className={`p-2 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 ${
+                className={`p-1.5 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 ${
                   searchOpen ? 'bg-pink-100 text-pink-600 rotate-90' : 'text-gray-700'
                 }`}
                 aria-label="Search"
               >
-                <Search size={scrolled ? 20 : 22} className="transition-all duration-300" />
+                <Search size={scrolled ? 18 : 20} className="transition-all duration-300" />
               </button>
+
+              {/* Track Order - Compact */}
+              <Link
+                href="/track-order"
+                className="hidden md:flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-300"
+                title="Track Order"
+              >
+                <MapPin size={16} />
+                <span className="hidden xl:inline">Track</span>
+              </Link>
 
               {/* Notifications */}
               {user && (
                 <Link
                   href="/notifications"
-                  className="relative p-2 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 hidden md:block"
+                  className="relative p-1.5 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 hidden md:block"
                   aria-label="Notifications"
                 >
-                  <Bell size={scrolled ? 20 : 22} className="text-gray-700 hover:text-pink-600 transition-all duration-300" />
+                  <Bell size={scrolled ? 18 : 20} className="text-gray-700 hover:text-pink-600 transition-all duration-300" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center font-bold animate-pulse shadow-lg px-1">
+                    <span className="absolute -top-0.5 -right-0.5 bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold animate-pulse shadow-lg px-0.5">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}
@@ -217,24 +231,24 @@ export default function Header() {
               {user && (
                 <Link
                   href="/wishlist"
-                  className="hidden md:flex p-2 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 text-gray-700 hover:text-pink-600"
+                  className="hidden md:flex p-1.5 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 text-gray-700 hover:text-pink-600"
                   aria-label="Wishlist"
                 >
-                  <Heart size={scrolled ? 20 : 22} className="transition-all duration-300" />
+                  <Heart size={scrolled ? 18 : 20} className="transition-all duration-300" />
                 </Link>
               )}
 
               {/* Cart */}
               <Link
                 href="/cart"
-                className="relative p-2 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 group"
+                className="relative p-1.5 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110 group"
               >
                 <ShoppingCart 
-                  size={scrolled ? 20 : 22} 
+                  size={scrolled ? 18 : 20} 
                   className="text-gray-700 group-hover:text-pink-600 transition-all duration-300"
                 />
                 {isHydrated && cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-r from-pink-500 to-purple-500 text-white text-xs rounded-full min-w-[20px] h-5 flex items-center justify-center font-bold animate-bounce shadow-lg px-1">
+                  <span className="absolute -top-0.5 -right-0.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white text-xs rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-bold animate-bounce shadow-lg px-0.5">
                     {cartCount}
                   </span>
                 )}
@@ -245,9 +259,9 @@ export default function Header() {
                 <div className="relative">
                   <button
                     onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                    className="hidden md:flex items-center space-x-2 px-3 py-2 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-105 group"
+                    className="hidden md:flex items-center space-x-1 px-2 py-1 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-105 group"
                   >
-                    <div className="w-9 h-9 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg group-hover:shadow-xl transition-all duration-300 relative overflow-hidden">
+                    <div className="w-8 h-8 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-lg group-hover:shadow-xl transition-all duration-300 relative overflow-hidden">
                       {user.photoURL ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img 
@@ -265,13 +279,13 @@ export default function Header() {
                         {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
                       </span>
                       {isAdmin && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-yellow-400 rounded-full border-2 border-white flex items-center justify-center z-10">
-                          <Shield size={10} className="text-white" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-yellow-400 rounded-full border-2 border-white flex items-center justify-center z-10">
+                          <Shield size={8} className="text-white" />
                         </div>
                       )}
                     </div>
                     <ChevronDown 
-                      size={16} 
+                      size={14} 
                       className={`transition-transform duration-300 text-gray-600 ${userDropdownOpen ? 'rotate-180' : ''}`}
                     />
                   </button>
@@ -283,7 +297,7 @@ export default function Header() {
                         className="fixed inset-0 z-40"
                         onClick={() => setUserDropdownOpen(false)}
                       />
-                      <div className="absolute right-0 mt-3 w-72 bg-white rounded-2xl shadow-2xl py-2 z-50 animate-slide-up border border-gray-100 max-h-[80vh] overflow-y-auto">
+                      <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl py-2 z-50 animate-slide-up border border-gray-100 max-h-[80vh] overflow-y-auto">
                         {/* User Info */}
                         <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-pink-50 to-purple-50">
                           <div className="flex items-center gap-3 mb-2">
@@ -376,6 +390,31 @@ export default function Header() {
                           );
                         })}
 
+                        {/* Quick Actions */}
+                        <div className="border-t border-gray-100 mt-2">
+                          <div className="px-4 py-2">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quick Actions</p>
+                          </div>
+                          {quickLinks
+                            .filter(link => !link.authOnly || user)
+                            .map((link) => {
+                              const Icon = link.icon;
+                              return (
+                                <Link
+                                  key={link.href}
+                                  href={link.href}
+                                  className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition-all duration-200 group"
+                                  onClick={() => setUserDropdownOpen(false)}
+                                >
+                                  <Icon size={18} className="text-blue-600 group-hover:text-blue-700 transition-colors" />
+                                  <span className="text-gray-700 group-hover:text-blue-700 transition-colors">
+                                    {link.label}
+                                  </span>
+                                </Link>
+                              );
+                            })}
+                        </div>
+
                         {/* Sign Out */}
                         <div className="border-t border-gray-100 mt-2">
                           <button
@@ -393,7 +432,7 @@ export default function Header() {
               ) : (
                 <Link
                   href="/login"
-                  className="hidden md:flex bg-gradient-to-r from-pink-600 to-purple-600 text-white px-5 py-2 rounded-full hover:from-pink-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 font-semibold shadow-lg hover:shadow-xl"
+                  className="hidden md:flex bg-gradient-to-r from-pink-600 to-purple-600 text-white px-4 py-1.5 text-sm rounded-full hover:from-pink-700 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 font-semibold shadow-lg hover:shadow-xl"
                 >
                   Sign In
                 </Link>
@@ -402,17 +441,17 @@ export default function Header() {
               {/* Mobile Menu Toggle */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110"
+                className="lg:hidden p-1.5 rounded-full hover:bg-pink-50 transition-all duration-300 transform hover:scale-110"
                 aria-label="Menu"
               >
-                <Menu size={24} className={`transition-all duration-300 ${mobileMenuOpen ? 'rotate-90' : ''}`} />
+                <Menu size={22} className={`transition-all duration-300 ${mobileMenuOpen ? 'rotate-90' : ''}`} />
               </button>
             </div>
           </div>
 
-          {/* Search Bar */}
+          {/* Search Bar - Compact */}
           <div className={`overflow-hidden transition-all duration-500 ${
-            searchOpen ? 'max-h-20 mt-4' : 'max-h-0'
+            searchOpen ? 'max-h-16 mt-2' : 'max-h-0'
           }`}>
             <form onSubmit={handleSearch} className="relative animate-slide-up">
               <input
@@ -420,17 +459,17 @@ export default function Header() {
                 placeholder="Search for cakes, flavors, occasions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-5 py-3 pl-12 pr-12 border-2 border-pink-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-300 shadow-lg"
+                className="w-full px-4 py-2 pl-10 pr-10 text-sm border-2 border-pink-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-300 shadow-lg"
                 autoFocus={searchOpen}
               />
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-pink-400" size={20} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-pink-400" size={18} />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               )}
             </form>
@@ -438,8 +477,8 @@ export default function Header() {
         </div>
       </header>
 
-      {/* Spacer to prevent content from being hidden under fixed header */}
-      <div className={`transition-all duration-500 ${scrolled ? 'h-16' : 'h-20'}`} />
+      {/* Spacer - Compact */}
+      <div className={`transition-all duration-500 ${scrolled ? 'h-12' : 'h-14'}`} />
 
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
@@ -559,6 +598,26 @@ export default function Header() {
                 </Link>
               );
             })}
+
+            {/* Quick Actions */}
+            <div className="border-t border-gray-200 my-2"></div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-2">Quick Actions</p>
+            {quickLinks
+              .filter(link => !link.authOnly || user)
+              .map((link) => {
+                const Icon = link.icon;
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-blue-50 transition-all duration-300 group font-medium text-gray-700 hover:text-blue-600"
+                  >
+                    <Icon size={20} className="text-blue-500 group-hover:text-blue-600 transition-colors" />
+                    {link.label}
+                  </Link>
+                );
+              })}
 
             {/* User Links */}
             {user && (
