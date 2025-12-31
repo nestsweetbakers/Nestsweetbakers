@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { useToast } from '@/context/ToastContext';
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -66,7 +66,6 @@ export default function CartPage() {
   const router = useRouter();
 
   const settings = rawSettings as ExtendedSettings;
-
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo>({
     name: '',
     phone: '',
@@ -245,10 +244,14 @@ export default function CartPage() {
 
     try {
       const orderRef = generateOrderRef();
-
+// ✅ GUEST ORDER SUPPORT
+      const isGuest = !user;
+      const userId = user?.uid || 'guest_' + Date.now();
+      
       const orderData = {
         orderRef,
-        userId: user?.uid || 'guest',
+        userId,
+        isGuest, // ✅ Flag for guest orders
         userName: customerInfo.name,
         userEmail: customerInfo.email,
         userPhone: customerInfo.phone,
@@ -326,19 +329,31 @@ export default function CartPage() {
       clearCart();
       showSuccess('🎉 Order placed successfully!');
 
-      if (paymentMethod === 'whatsapp') {
+      // ✅ GUEST USER FLOW
+      if (isGuest) {
+        // Show order tracking modal
+        showInfo(`Order ID: ${orderRef}. Save this to track your order!`);
+        
+        // Redirect to track order page with order ID
         setTimeout(() => {
-          openWhatsApp(orderId, orderData);
-        }, 1000);
-      } else if (paymentMethod === 'online') {
-        showInfo('Redirecting to payment gateway...');
-        setTimeout(() => {
-          router.push(`/payment/${orderId}`);
-        }, 1500);
+          router.push(`/track-order?ref=${orderRef}`);
+        }, 2000);
       } else {
-        setTimeout(() => {
-          router.push(`/order-success/${orderId}`);
-        }, 1500);
+        // Logged-in user flow
+        if (paymentMethod === 'whatsapp') {
+          setTimeout(() => {
+            openWhatsApp(orderId, orderData);
+          }, 1000);
+        } else if (paymentMethod === 'online') {
+          showInfo('Redirecting to payment gateway...');
+          setTimeout(() => {
+            router.push(`/payment/${orderId}`);
+          }, 1500);
+        } else {
+          setTimeout(() => {
+            router.push(`/order-success/${orderId}`);
+          }, 1500);
+        }
       }
 
     } catch (error) {
