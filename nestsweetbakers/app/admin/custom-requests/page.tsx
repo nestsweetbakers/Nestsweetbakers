@@ -1,16 +1,19 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { collection, getDocs, updateDoc, deleteDoc, doc, orderBy, query, serverTimestamp, writeBatch, addDoc } from 'firebase/firestore';
+import { collection, getDocs, updateDoc, deleteDoc, doc, orderBy, query, serverTimestamp, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/context/ToastContext';
+import { useRouter } from 'next/navigation';
 import { 
   Trash2, Mail, Phone, Calendar, MessageSquare, CheckCircle, 
   Clock, XCircle, Image as ImageIcon, Search, Filter, Download,
   DollarSign, Cake, ChevronDown, ChevronUp, Eye, MapPin, Users,
-  Layers, AlertCircle, Edit, Send, Loader2, Package, MessageCircle
+  Layers, AlertCircle, Edit, Send, Loader2, Package, MessageCircle,
+  ArrowRight, Bell, Copy, Check, ExternalLink
 } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 interface CustomRequest {
   id: string;
@@ -54,6 +57,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function CustomRequestsPage() {
+  const router = useRouter();
   const [requests, setRequests] = useState<CustomRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<CustomRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,11 +65,17 @@ export default function CustomRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
   const [viewImage, setViewImage] = useState<string | null>(null);
-  const [editingNotes, setEditingNotes] = useState<string | null>(null);
-  const [adminNotes, setAdminNotes] = useState('');
-  const [quotedPrice, setQuotedPrice] = useState('');
-  const [savingNotes, setSavingNotes] = useState(false);
+  const [updating, setUpdating] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const { showSuccess, showError } = useToast();
+
+  // WhatsApp modal state
+  const [whatsappModal, setWhatsappModal] = useState<{
+    show: boolean;
+    requestId: string;
+    newStatus: string;
+    message: string;
+  }>({ show: false, requestId: '', newStatus: '', message: '' });
 
   const fetchRequests = useCallback(async () => {
     try {
@@ -113,111 +123,156 @@ export default function CustomRequestsPage() {
     setFilteredRequests(result);
   }, [requests, statusFilter, searchTerm]);
 
-  // ✅ Generate WhatsApp message for status update
+  // Generate WhatsApp status message
   const generateStatusMessage = (request: CustomRequest, newStatus: string) => {
-    let statusMessage = '';
+    let statusEmoji = '';
+    let statusText = '';
     
     switch (newStatus) {
       case 'processing':
-        statusMessage = `🔄 Your custom ${request.occasion} cake request is now being processed!\n\n` +
-                       `We're reviewing your design requirements and will get back to you shortly.`;
+        statusEmoji = '🔄';
+        statusText = `Your custom ${request.occasion} cake request is now being processed!`;
         break;
       case 'approved':
-        statusMessage = `✅ Great news! Your custom ${request.occasion} cake request has been approved!\n\n` +
-                       `💰 Quoted Price: ₹${request.quotedPrice || request.budget}\n` +
-                       `📅 Delivery Date: ${new Date(request.deliveryDate).toLocaleDateString('en-IN')}\n\n` +
-                       (request.adminNotes ? `📝 Notes: ${request.adminNotes}\n\n` : '') +
-                       `We'll contact you soon to confirm the order.`;
-        break;
-      case 'rejected':
-        statusMessage = `❌ We're sorry, but we cannot fulfill your custom ${request.occasion} cake request at this time.\n\n` +
-                       (request.adminNotes ? `Reason: ${request.adminNotes}\n\n` : '') +
-                       `Please feel free to contact us for alternative designs or requirements.`;
+        statusEmoji = '✅';
+        statusText = `Great news! Your custom ${request.occasion} cake request has been approved!`;
         break;
       case 'completed':
-        statusMessage = `🎉 Your custom ${request.occasion} cake is ready for delivery!\n\n` +
-                       `Thank you for choosing NestSweet Bakers. We hope you love your cake! 🍰`;
+        statusEmoji = '🎉';
+        statusText = `Your custom ${request.occasion} cake is ready for delivery!`;
+        break;
+      case 'rejected':
+        statusEmoji = '❌';
+        statusText = `We're sorry, but we cannot fulfill your custom ${request.occasion} cake request at this time.`;
         break;
       default:
-        statusMessage = `📋 Update on your custom ${request.occasion} cake request.\n\n` +
-                       `Status: ${newStatus}\n\n` +
-                       `We'll keep you updated on any progress.`;
+        statusEmoji = '📋';
+        statusText = `Update on your custom ${request.occasion} cake request.`;
     }
 
-    const message = encodeURIComponent(
-      `Hello ${request.name},\n\n${statusMessage}\n\n` +
-      `Request ID: #${request.id.slice(0, 8)}\n\n` +
-      `For any queries, feel free to contact us.\n\n` +
-      `- NestSweet Bakers Team 🍰`
-    );
+    const message = 
+      `Hello ${request.name},\n\n` +
+      `${statusEmoji} ${statusText}\n\n` +
+      `REQUEST DETAILS:\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `Request ID: #${request.id.slice(0, 8)}\n` +
+      `Occasion: ${request.occasion}\n` +
+      `Flavor: ${request.flavor}\n` +
+      `Size: ${request.size}\n` +
+      `Budget: ₹${request.budget}\n` +
+      (request.quotedPrice ? `Quoted Price: ₹${request.quotedPrice}\n` : '') +
+      `Delivery Date: ${new Date(request.deliveryDate).toLocaleDateString('en-IN')}\n\n` +
+      (request.adminNotes ? `Notes: ${request.adminNotes}\n\n` : '') +
+      `Thank you for choosing NestSweet Bakers!\n\n` +
+      `For any queries, feel free to contact us.`;
     
     return message;
   };
 
-  // ✅ Updated updateStatus function with WhatsApp notification
-  const updateStatus = async (id: string, status: string, sendWhatsApp: boolean = false) => {
+  // Create in-app notification
+  const createNotification = async (request: CustomRequest, newStatus: string, oldStatus: string) => {
+    if (!request.userId || oldStatus === newStatus) return;
+
     try {
+      let title = '';
+      let body = '';
+      let type: 'info' | 'success' | 'warning' = 'info';
+
+      switch (newStatus) {
+        case 'processing':
+          title = 'Request Being Reviewed';
+          body = `Your custom ${request.occasion} cake request is now being processed.`;
+          type = 'info';
+          break;
+        case 'approved':
+          title = 'Request Approved!';
+          body = `Your custom ${request.occasion} cake request has been approved${request.quotedPrice ? ` at ₹${request.quotedPrice}` : ''}.`;
+          type = 'success';
+          break;
+        case 'completed':
+          title = 'Cake Ready!';
+          body = `Your custom ${request.occasion} cake is ready for delivery!`;
+          type = 'success';
+          break;
+        case 'rejected':
+          title = 'Request Update';
+          body = `Your custom ${request.occasion} cake request status has been updated.`;
+          type = 'warning';
+          break;
+        default:
+          title = 'Request Update';
+          body = `Your custom ${request.occasion} cake request status has been updated to ${newStatus}.`;
+          type = 'info';
+      }
+
+      await addDoc(collection(db, 'notifications'), {
+        userId: request.userId,
+        requestId: request.id,
+        title,
+        body,
+        type,
+        read: false,
+        createdAt: serverTimestamp(),
+        actionUrl: `/orders`,
+      });
+    } catch (error) {
+      console.error('Error creating notification:', error);
+    }
+  };
+
+  // Update status
+  const updateStatus = async (id: string, newStatus: string, skipWhatsApp = false, customMessage?: string) => {
+    const request = requests.find(r => r.id === id);
+    if (!request) return;
+
+    // Show WhatsApp modal if not skipping
+    if (!skipWhatsApp && !customMessage && request.phone && newStatus !== request.status) {
+      const defaultMessage = generateStatusMessage(request, newStatus);
+      setWhatsappModal({
+        show: true,
+        requestId: id,
+        newStatus,
+        message: defaultMessage
+      });
+      return;
+    }
+
+    setUpdating(id);
+    try {
+      const oldStatus = request.status;
+
       await updateDoc(doc(db, 'customRequests', id), {
-        status,
+        status: newStatus,
         updatedAt: serverTimestamp(),
       });
 
-      const updatedRequest = requests.find(r => r.id === id);
-      
-      setRequests(requests.map(request =>
-        request.id === id ? { ...request, status: status as any } : request
+      setRequests(requests.map(r =>
+        r.id === id ? { ...r, status: newStatus as any } : r
       ));
 
-      showSuccess(`✅ Request status updated to ${status}`);
+      // Create in-app notification
+      await createNotification(request, newStatus, oldStatus);
 
-      // ✅ Open WhatsApp with pre-filled message if requested
-      if (sendWhatsApp && updatedRequest && updatedRequest.phone) {
-        const message = generateStatusMessage(updatedRequest, status);
-        const whatsappUrl = `https://wa.me/${updatedRequest.phone.replace(/[^0-9]/g, '')}?text=${message}`;
+      showSuccess(`✅ Request status updated to ${newStatus}`);
+
+      // Open WhatsApp if custom message provided
+      if (customMessage && request.phone) {
+        const whatsappUrl = `https://wa.me/${request.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(customMessage)}`;
         window.open(whatsappUrl, '_blank');
       }
     } catch (error) {
       console.error('Error updating status:', error);
       showError('❌ Failed to update status');
+    } finally {
+      setUpdating(null);
     }
   };
 
-  const handleSaveNotes = async (requestId: string) => {
-    setSavingNotes(true);
-    try {
-      const updateData: any = {
-        updatedAt: serverTimestamp(),
-      };
-
-      if (adminNotes) {
-        updateData.adminNotes = adminNotes;
-      }
-
-      if (quotedPrice) {
-        updateData.quotedPrice = parseFloat(quotedPrice);
-      }
-
-      await updateDoc(doc(db, 'customRequests', requestId), updateData);
-
-      setRequests(requests.map(request =>
-        request.id === requestId 
-          ? { 
-              ...request, 
-              adminNotes: adminNotes || request.adminNotes,
-              quotedPrice: quotedPrice ? parseFloat(quotedPrice) : request.quotedPrice
-            } 
-          : request
-      ));
-
-      setEditingNotes(null);
-      setAdminNotes('');
-      setQuotedPrice('');
-      showSuccess('✅ Notes saved successfully');
-    } catch (error) {
-      console.error('Error saving notes:', error);
-      showError('❌ Failed to save notes');
-    } finally {
-      setSavingNotes(false);
+  // Handle WhatsApp send
+  const handleSendWhatsApp = () => {
+    if (whatsappModal.requestId && whatsappModal.newStatus) {
+      updateStatus(whatsappModal.requestId, whatsappModal.newStatus, true, whatsappModal.message);
+      setWhatsappModal({ show: false, requestId: '', newStatus: '', message: '' });
     }
   };
 
@@ -302,7 +357,7 @@ export default function CustomRequestsPage() {
       };
 
       await addDoc(collection(db, 'orders'), orderData);
-      await updateStatus(request.id, 'approved');
+      await updateStatus(request.id, 'approved', true);
       
       showSuccess('✅ Converted to order successfully!');
     } catch (error) {
@@ -355,6 +410,13 @@ export default function CustomRequestsPage() {
     showSuccess('✅ Requests exported successfully');
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    showSuccess('Copied to clipboard!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   const getStatusColor = (status: string) => {
     return STATUS_OPTIONS.find(s => s.value === status)?.color || 'bg-gray-100 text-gray-800';
   };
@@ -377,10 +439,7 @@ export default function CustomRequestsPage() {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            <div className="absolute inset-0 border-4 border-pink-200 rounded-full animate-ping"></div>
-            <div className="relative w-24 h-24 border-4 border-pink-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+          <Loader2 className="animate-spin h-16 w-16 text-pink-600 mx-auto mb-4" />
           <p className="text-gray-600 font-semibold text-lg">Loading custom requests...</p>
         </div>
       </div>
@@ -389,6 +448,70 @@ export default function CustomRequestsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* WhatsApp Message Modal */}
+      {whatsappModal.show && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-6 animate-scale-up max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <MessageCircle className="text-green-600" size={24} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-800">Send WhatsApp Update</h3>
+                  <p className="text-sm text-gray-600">Request #{whatsappModal.requestId.slice(0, 8)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setWhatsappModal({ show: false, requestId: '', newStatus: '', message: '' })}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <Bell className="inline mr-2" size={16} />
+                Status will be updated to <strong className="uppercase">{whatsappModal.newStatus}</strong> and customer will receive this message on WhatsApp.
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Message to Customer
+              </label>
+              <textarea
+                value={whatsappModal.message}
+                onChange={(e) => setWhatsappModal({ ...whatsappModal, message: e.target.value })}
+                rows={12}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none font-mono text-sm"
+                placeholder="Edit message before sending..."
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  updateStatus(whatsappModal.requestId, whatsappModal.newStatus, true);
+                  setWhatsappModal({ show: false, requestId: '', newStatus: '', message: '' });
+                }}
+                className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all"
+              >
+                Skip WhatsApp, Just Update
+              </button>
+              <button
+                onClick={handleSendWhatsApp}
+                className="flex-1 px-4 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+              >
+                <Send size={18} />
+                Send & Update Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -502,11 +625,17 @@ export default function CustomRequestsPage() {
                       )}
                     </div>
                     
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600">
-                      <p className="flex items-center gap-2">
-                        <Cake size={14} className="flex-shrink-0" />
-                        #{request.id.slice(0, 8)}
-                      </p>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm text-gray-600 mb-3">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => copyToClipboard(request.id)}
+                          className="flex items-center gap-1 hover:text-pink-600 transition"
+                        >
+                          <Cake size={14} className="flex-shrink-0" />
+                          #{request.id.slice(0, 8)}
+                          {copied ? <Check size={12} /> : <Copy size={12} />}
+                        </button>
+                      </div>
                       <p className="flex items-center gap-2">
                         <Calendar size={14} className="flex-shrink-0" />
                         {request.createdAt?.toLocaleDateString('en-IN')}
@@ -522,7 +651,7 @@ export default function CustomRequestsPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex items-center gap-3">
                     <div className="text-right">
                       <p className="text-sm text-gray-500">Budget</p>
                       <p className="text-2xl font-bold text-pink-600">₹{request.budget}</p>
@@ -533,343 +662,131 @@ export default function CustomRequestsPage() {
                       )}
                     </div>
                     
-                    <button
-                      onClick={() => setExpandedRequest(expandedRequest === request.id ? null : request.id)}
-                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      {expandedRequest === request.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                    </button>
+                    <div className="flex gap-2">
+                      <Link
+                        href={`/admin/custom-requests/${request.id}`}
+                        className="p-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors"
+                        title="View Full Details"
+                      >
+                        <ExternalLink size={20} />
+                      </Link>
+                      
+                      <button
+                        onClick={() => setExpandedRequest(expandedRequest === request.id ? null : request.id)}
+                        className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      >
+                        {expandedRequest === request.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Expanded Details */}
+              {/* Quick Preview */}
               {expandedRequest === request.id && (
-                <div className="p-4 md:p-6 bg-gray-50 space-y-6">
-                  {/* Customer Info */}
-                  <div>
-                    <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                      <Eye size={18} className="text-pink-600" />
-                      Customer Details
-                    </h4>
-                    
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                      <div className="bg-white rounded-xl p-4 space-y-3 text-sm">
-                        <div className="flex items-start gap-3">
-                          <Phone className="text-gray-400 flex-shrink-0 mt-0.5" size={16} />
-                          <div className="flex-1">
-                            <p className="text-gray-500 text-xs">Name & Phone</p>
-                            <p className="font-semibold text-gray-800">{request.name}</p>
-                            <a
-                              href={`tel:${request.phone}`}
-                              className="text-pink-600 hover:text-pink-700 font-medium"
-                            >
-                              {request.phone}
-                            </a>
-                          </div>
-                        </div>
-
-                        {(request.email || request.userEmail) && (
-                          <div className="flex items-start gap-3">
-                            <Mail className="text-gray-400 flex-shrink-0 mt-0.5" size={16} />
-                            <div className="flex-1">
-                              <p className="text-gray-500 text-xs">Email</p>
-                              <p className="font-semibold text-gray-800 break-all">{request.email || request.userEmail}</p>
-                            </div>
-                          </div>
-                        )}
-
-                        {request.deliveryAddress && (
-                          <div className="flex items-start gap-3">
-                            <MapPin className="text-gray-400 flex-shrink-0 mt-0.5" size={16} />
-                            <div className="flex-1">
-                              <p className="text-gray-500 text-xs">Delivery Address</p>
-                              <p className="font-semibold text-gray-800">{request.deliveryAddress}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="bg-white rounded-xl p-4 space-y-3 text-sm">
-                        <div className="flex items-start gap-3">
-                          <Calendar className="text-gray-400 flex-shrink-0 mt-0.5" size={16} />
-                          <div className="flex-1">
-                            <p className="text-gray-500 text-xs">Delivery Date</p>
-                            <p className="font-semibold text-gray-800">
-                              {new Date(request.deliveryDate).toLocaleDateString('en-IN', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="text-gray-400 flex-shrink-0 mt-0.5" size={16} />
-                          <div className="flex-1">
-                            <p className="text-gray-500 text-xs">Urgency</p>
-                            <p className="font-semibold text-gray-800 capitalize">
-                              {request.urgency === 'urgent' ? '🔴 Urgent' : '🟢 Normal'}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
+                <div className="p-4 md:p-6 bg-gray-50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {/* Customer Info */}
+                    <div className="bg-white rounded-lg p-4">
+                      <h4 className="font-bold text-sm text-gray-700 mb-2 flex items-center gap-2">
+                        <Users size={16} className="text-pink-600" />
+                        Customer
+                      </h4>
+                      <p className="text-sm"><strong>{request.name}</strong></p>
+                      <p className="text-sm text-gray-600">{request.phone}</p>
+                      {request.email && <p className="text-xs text-gray-500">{request.email}</p>}
                     </div>
-                  </div>
 
-                  {/* Cake Specifications */}
-                  <div>
-                    <h4 className="font-bold text-gray-800 mb-3">Cake Specifications</h4>
-                    <div className="bg-white rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <p className="text-gray-500 text-xs mb-1">Flavor</p>
-                        <p className="font-semibold">{request.flavor}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 text-xs mb-1">Size</p>
-                        <p className="font-semibold">{request.size}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 text-xs mb-1">Servings</p>
-                        <p className="font-semibold">{request.servings || 'Not specified'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 text-xs mb-1">Tiers</p>
-                        <p className="font-semibold">{request.tier || '1'} {request.tier === '1' ? 'Tier' : 'Tiers'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 text-xs mb-1">Type</p>
-                        <p className="font-semibold">{request.eggless ? '🥚 Eggless' : 'Regular'}</p>
-                      </div>
-                      <div>
-                        <p className="text-gray-500 text-xs mb-1">Budget</p>
-                        <p className="font-semibold text-pink-600">₹{request.budget}</p>
-                      </div>
-                      {request.quotedPrice && (
-                        <div>
-                          <p className="text-gray-500 text-xs mb-1">Your Quote</p>
-                          <p className="font-semibold text-green-600">₹{request.quotedPrice}</p>
-                        </div>
+                    {/* Cake Details */}
+                    <div className="bg-white rounded-lg p-4">
+                      <h4 className="font-bold text-sm text-gray-700 mb-2 flex items-center gap-2">
+                        <Cake size={16} className="text-pink-600" />
+                        Details
+                      </h4>
+                      <p className="text-sm"><strong>Flavor:</strong> {request.flavor}</p>
+                      <p className="text-sm"><strong>Size:</strong> {request.size}</p>
+                      <p className="text-sm"><strong>Tiers:</strong> {request.tier || '1'}</p>
+                    </div>
+
+                    {/* Delivery */}
+                    <div className="bg-white rounded-lg p-4">
+                      <h4 className="font-bold text-sm text-gray-700 mb-2 flex items-center gap-2">
+                        <Calendar size={16} className="text-pink-600" />
+                        Delivery
+                      </h4>
+                      <p className="text-sm">
+                        {new Date(request.deliveryDate).toLocaleDateString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </p>
+                      {request.deliveryAddress && (
+                        <p className="text-xs text-gray-600 mt-1">{request.deliveryAddress.slice(0, 50)}...</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Design Description */}
-                  <div>
-                    <h4 className="font-bold text-gray-800 mb-3">Design Description</h4>
-                    <div className="bg-purple-50 rounded-xl p-4 border-2 border-purple-200">
-                      <p className="text-gray-700 whitespace-pre-wrap">{request.design}</p>
-                    </div>
-                  </div>
+                  {/* Quick Actions */}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={`/admin/custom-requests/${request.id}`}
+                      className="px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg hover:from-pink-700 hover:to-purple-700 transition font-semibold flex items-center gap-2"
+                    >
+                      <Eye size={16} />
+                      Full Details
+                    </Link>
 
-                  {/* Additional Message */}
-                  {request.message && (
-                    <div>
-                      <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                        <MessageSquare size={18} className="text-blue-600" />
-                        Additional Notes
-                      </h4>
-                      <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
-                        <p className="text-gray-700 whitespace-pre-wrap">{request.message}</p>
-                      </div>
-                    </div>
-                  )}
+                    <select
+                      value={request.status}
+                      onChange={(e) => updateStatus(request.id, e.target.value)}
+                      disabled={updating === request.id}
+                      className="px-4 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all disabled:opacity-50 font-semibold"
+                    >
+                      {STATUS_OPTIONS.map(status => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                        </option>
+                      ))}
+                    </select>
 
-                  {/* Reference Images */}
-                  {request.referenceImages && request.referenceImages.length > 0 && (
-                    <div>
-                      <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                        <ImageIcon size={18} className="text-purple-600" />
-                        Reference Images ({request.referenceImages.length})
-                      </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        {request.referenceImages.map((url, idx) => (
-                          <div
-                            key={idx}
-                            className="relative h-40 rounded-xl overflow-hidden cursor-pointer group border-4 border-white shadow-lg"
-                            onClick={() => setViewImage(url)}
-                          >
-                            <Image
-                              src={url}
-                              alt={`Reference ${idx + 1}`}
-                              fill
-                              className="object-cover group-hover:scale-110 transition-transform duration-300"
-                              sizes="(max-width: 768px) 50vw, 20vw"
-                            />
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all flex items-center justify-center">
-                              <Eye className="text-white opacity-0 group-hover:opacity-100 transition-opacity" size={32} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Admin Notes Section */}
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-bold text-gray-800 flex items-center gap-2">
-                        <Edit size={18} className="text-green-600" />
-                        Admin Notes & Quote
-                      </h4>
-                      {!editingNotes && (
-                        <button
-                          onClick={() => {
-                            setEditingNotes(request.id);
-                            setAdminNotes(request.adminNotes || '');
-                            setQuotedPrice(request.quotedPrice?.toString() || '');
-                          }}
-                          className="px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition font-semibold flex items-center gap-2"
-                        >
-                          <Edit size={16} />
-                          {request.adminNotes ? 'Edit Notes' : 'Add Notes'}
-                        </button>
-                      )}
-                    </div>
-
-                    {editingNotes === request.id ? (
-                      <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200 space-y-4">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Admin Notes
-                          </label>
-                          <textarea
-                            value={adminNotes}
-                            onChange={(e) => setAdminNotes(e.target.value)}
-                            placeholder="Add notes about design feasibility, modifications, timeline, etc..."
-                            rows={4}
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Quoted Price (₹)
-                          </label>
-                          <input
-                            type="number"
-                            value={quotedPrice}
-                            onChange={(e) => setQuotedPrice(e.target.value)}
-                            placeholder="Enter your quote"
-                            min="0"
-                            step="1"
-                            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          />
-                        </div>
-
-                        <div className="flex gap-3">
-                          <button
-                            onClick={() => handleSaveNotes(request.id)}
-                            disabled={savingNotes}
-                            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                          >
-                            {savingNotes ? (
-                              <>
-                                <Loader2 className="animate-spin" size={18} />
-                                Saving...
-                              </>
-                            ) : (
-                              <>
-                                <Send size={18} />
-                                Save Notes
-                              </>
-                            )}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setEditingNotes(null);
-                              setAdminNotes('');
-                              setQuotedPrice('');
-                            }}
-                            className="px-4 py-3 border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-semibold"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
+                    {request.phone && (
                       <>
-                        {request.adminNotes && (
-                          <div className="bg-green-50 rounded-xl p-4 border-2 border-green-200">
-                            <p className="text-gray-700 whitespace-pre-wrap">{request.adminNotes}</p>
-                            {request.quotedPrice && (
-                              <p className="mt-3 font-bold text-green-600 text-lg">
-                                Quoted Price: ₹{request.quotedPrice}
-                              </p>
-                            )}
-                          </div>
-                        )}
+                        <a
+                          href={`tel:${request.phone}`}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center gap-2"
+                        >
+                          <Phone size={16} />
+                          Call
+                        </a>
+
+                        <a
+                          href={`https://wa.me/${request.phone.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold flex items-center gap-2"
+                        >
+                          <MessageCircle size={16} />
+                          WhatsApp
+                        </a>
                       </>
                     )}
-                  </div>
 
-                  {/* ✅ UPDATED: Actions with WhatsApp Status Notification */}
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="font-bold text-gray-800 mb-3">Update Status</h4>
-                      <div className="flex flex-wrap gap-3">
-                        {STATUS_OPTIONS.map(status => (
-                          <button
-                            key={status.value}
-                            onClick={() => updateStatus(request.id, status.value, true)}
-                            className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all ${
-                              request.status === status.value
-                                ? status.color + ' border-2'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
-                          >
-                            {getStatusIcon(status.value)}
-                            {status.label}
-                            {request.status === status.value && ' ✓'}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        💡 Clicking a status will open WhatsApp with a pre-filled message to the customer
-                      </p>
-                    </div>
+                    <button
+                      onClick={() => convertToOrder(request)}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold flex items-center gap-2"
+                    >
+                      <Package size={16} />
+                      Convert to Order
+                    </button>
 
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        onClick={() => convertToOrder(request)}
-                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-semibold flex items-center gap-2"
-                      >
-                        <Package size={18} />
-                        Convert to Order
-                      </button>
-
-                      {request.phone && (
-                        <>
-                          <a
-                            href={`tel:${request.phone}`}
-                            className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold flex items-center gap-2"
-                          >
-                            <Phone size={18} />
-                            Call
-                          </a>
-
-                          <a
-                            href={`https://wa.me/${request.phone.replace(/[^0-9]/g, '')}?text=${generateStatusMessage(request, request.status)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition font-semibold flex items-center gap-2"
-                          >
-                            <MessageCircle size={18} />
-                            WhatsApp
-                          </a>
-                        </>
-                      )}
-
-                      <button
-                        onClick={() => handleDelete(request.id)}
-                        className="px-6 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition font-semibold flex items-center gap-2"
-                      >
-                        <Trash2 size={18} />
-                        Delete
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleDelete(request.id)}
+                      className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition font-semibold flex items-center gap-2"
+                    >
+                      <Trash2 size={16} />
+                      Delete
+                    </button>
                   </div>
                 </div>
               )}
@@ -910,8 +827,17 @@ export default function CustomRequestsPage() {
           to { opacity: 1; transform: translateY(0); }
         }
         
+        @keyframes scale-up {
+          from { opacity: 0; transform: scale(0.9); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        
         .animate-fade-in {
           animation: fade-in 0.6s ease-out forwards;
+        }
+
+        .animate-scale-up {
+          animation: scale-up 0.3s ease-out;
         }
       `}</style>
     </div>
