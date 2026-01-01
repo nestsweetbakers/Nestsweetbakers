@@ -876,73 +876,69 @@ export default function HomePage() {
         </section>
 
         {/* Testimonials */}
-        <section className="py-8 md:py-12 bg-gradient-to-br from-pink-50 to-purple-50 overflow-hidden">
-          <div className="container mx-auto px-4">
-            <div className="text-center mb-8">
-              <h2 className="text-2xl md:text-3xl font-bold mb-2">
-                Customer Reviews
-              </h2>
-              <p className="text-gray-600 text-sm">
-                What our customers say
-              </p>
+<section className="py-6 md:py-10 bg-gradient-to-br from-pink-50 to-purple-50 overflow-hidden">
+  <div className="container mx-auto px-3 sm:px-4">
+    <div className="text-center mb-6 md:mb-8">
+      <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-1.5 md:mb-2">
+        Customer Reviews
+      </h2>
+      <p className="text-gray-600 text-xs sm:text-sm">
+        What our customers say
+      </p>
+    </div>
+
+    <div className="relative">
+      <div
+        ref={testimonialsRef}
+        className="flex gap-3 sm:gap-4 overflow-x-auto pb-3 sm:pb-4 scroll-smooth hide-scrollbar"
+      >
+        {testimonials.map((testimonial, i) => (
+          <div
+            key={i}
+            className="min-w-[220px] sm:min-w-[260px] md:min-w-[320px] bg-white p-4 sm:p-5 rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 border border-pink-100 flex-shrink-0"
+          >
+            <Quote className="text-pink-300 mb-2.5" size={20} />
+            <div className="flex mb-2">
+              {Array.from({ length: testimonial.rating }).map((_, j) => (
+                <Star
+                  key={j}
+                  size={12}
+                  className="fill-yellow-400 text-yellow-400"
+                />
+              ))}
             </div>
-
-            <div className="relative">
-              <div
-                ref={testimonialsRef}
-                className="flex gap-4 overflow-x-auto pb-4 scroll-smooth hide-scrollbar"
-              >
-                {testimonials.map((testimonial, i) => (
-                  <div
-                    key={i}
-                    className="min-w-[280px] md:min-w-[320px] bg-white p-5 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-pink-100 flex-shrink-0"
-                  >
-                    <Quote
-                      className="text-pink-300 mb-3"
-                      size={24}
-                    />
-                    <div className="flex mb-3">
-                      {Array.from({ length: testimonial.rating }).map(
-                        (_, j) => (
-                          <Star
-                            key={j}
-                            size={14}
-                            className="fill-yellow-400 text-yellow-400"
-                          />
-                        ),
-                      )}
-                    </div>
-                    <p className="text-gray-700 text-sm mb-4 italic line-clamp-3">
-                      &ldquo;{testimonial.comment}&rdquo;
-                    </p>
-                    <div className="flex items-center gap-3">
-                      {testimonial.image && (
-                        <Image
-                          src={testimonial.image}
-                          alt={testimonial.name}
-                          width={40}
-                          height={40}
-                          className="rounded-full"
-                        />
-                      )}
-                      <div>
-                        <p className="font-bold text-sm text-gray-900">
-                          {testimonial.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {testimonial.date}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            <p className="text-gray-700 text-xs sm:text-sm mb-3 italic line-clamp-3">
+              &ldquo;{testimonial.comment}&rdquo;
+            </p>
+            <div className="flex items-center gap-2.5">
+              {testimonial.image && (
+                <Image
+                  src={testimonial.image}
+                  alt={testimonial.name}
+                  width={32}
+                  height={32}
+                  className="rounded-full"
+                />
+              )}
+              <div>
+                <p className="font-bold text-xs sm:text-sm text-gray-900">
+                  {testimonial.name}
+                </p>
+                <p className="text-[11px] sm:text-xs text-gray-500">
+                  {testimonial.date}
+                </p>
               </div>
-
-              <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-pink-50 to-transparent pointer-events-none" />
-              <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-purple-50 to-transparent pointer-events-none" />
             </div>
           </div>
-        </section>
+        ))}
+      </div>
+
+      <div className="absolute left-0 top-0 bottom-0 w-10 sm:w-16 bg-gradient-to-r from-pink-50 to-transparent pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-10 sm:w-16 bg-gradient-to-l from-purple-50 to-transparent pointer-events-none" />
+    </div>
+  </div>
+</section>
+
 
         {/* Custom CTA */}
         <section className="py-8 md:py-12 bg-white">

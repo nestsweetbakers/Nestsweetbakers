@@ -49,7 +49,7 @@ export default function Footer() {
 
   const supportLinks = [
     { label: 'Contact Us', href: '/contact' },
-    { label: 'FAQs', href: '/faq' },
+   //  { label: 'FAQs', href: '/faq' },
     { label: 'Track Order', href: '/track-order' },
     { label: 'Claim Order', href: '/claim-order' },
     { label: 'Orders', href: '/orders' },
