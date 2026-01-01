@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from "@/context/AuthContext";
 import {
   Package, Clock, CheckCircle, XCircle, Loader2, Truck, Calendar,
   Phone, MessageCircle, Mail, MapPin, User, ArrowLeft, Share2,
@@ -93,6 +94,7 @@ export default function AdminOrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = params.id as string;
+  
   const { showSuccess, showError } = useToast();
 
   const [order, setOrder] = useState<Order | null>(null);
@@ -182,52 +184,54 @@ export default function AdminOrderDetailPage() {
     return message;
   };
 
-  // Create in-app notification
-  const createNotification = async (newStatus: string, oldStatus: string) => {
-    if (!order || !order.userId || oldStatus === newStatus) return;
+ // Create in-app notification (for the customer)
+const createNotification = async (newStatus: string, oldStatus: string) => {
+  if (!order || !order.userId || oldStatus === newStatus) return;
 
-    try {
-      let title = '';
-      let body = '';
-      let type: 'info' | 'success' | 'warning' = 'info';
+  try {
+    let title = '';
+    let message = '';
+    let priority: 'low' | 'medium' | 'high' = 'low';
 
-      switch (newStatus) {
-        case 'processing':
-          title = 'Order Being Prepared';
-          body = `Your order #${order.orderRef} is now being prepared. We'll update you when it's ready!`;
-          type = 'info';
-          break;
-        case 'completed':
-          title = 'Order Ready!';
-          body = `Your order #${order.orderRef} is ready for delivery. Get ready for delicious cakes!`;
-          type = 'success';
-          break;
-        case 'cancelled':
-          title = 'Order Cancelled';
-          body = `Your order #${order.orderRef} has been cancelled. Contact us if you have questions.`;
-          type = 'warning';
-          break;
-        default:
-          title = 'Order Update';
-          body = `Your order #${order.orderRef} status has been updated to ${newStatus}.`;
-          type = 'info';
-      }
-
-      await addDoc(collection(db, 'notifications'), {
-        userId: order.userId,
-        orderId: order.id,
-        orderRef: order.orderRef,
-        title,
-        body,
-        type,
-        read: false,
-        createdAt: serverTimestamp(),
-        actionUrl: `/orders`,
-      });
-    } catch (error) {
-      console.error('Error creating notification:', error);
+    switch (newStatus) {
+      case 'processing':
+        title = 'Order Being Prepared';
+        message = `Your order #${order.orderRef} is now being prepared. We'll update you when it's ready!`;
+        priority = 'medium';
+        break;
+      case 'completed':
+        title = 'Order Ready!';
+        message = `Your order #${order.orderRef} is ready for delivery. Get ready for delicious cakes!`;
+        priority = 'high';
+        break;
+      case 'cancelled':
+        title = 'Order Cancelled';
+        message = `Your order #${order.orderRef} has been cancelled. Contact us if you have questions.`;
+        priority = 'high';
+        break;
+      default:
+        title = 'Order Update';
+        message = `Your order #${order.orderRef} status has been updated to ${newStatus}.`;
+        priority = 'low';
     }
-  };
+
+    await addDoc(collection(db, 'notifications'), {
+      userId: order.userId,
+      type: 'order',                      // ✅ matches NotificationsPage interface
+      title,
+      message,                            // ✅ field name this page expects
+      read: false,
+      createdAt: serverTimestamp(),
+      orderId: order.id,
+      orderRef: order.orderRef,
+      priority,
+      actionUrl: `/orders`,              // where “View Details” should go
+    });
+  } catch (error) {
+    console.error('Error creating notification:', error);
+  }
+};
+
 
   // Update order status
   const updateOrderStatus = async (newStatus: string, skipWhatsApp = false, customMessage?: string) => {

@@ -13,13 +13,13 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { useToast } from '@/context/ToastContext';
-
 interface Notification {
   id: string;
   userId: string;
-  type: 'order' | 'product' | 'general' | 'custom_request' | 'review' | 'promotion' | 'system';
+  type: 'order' | 'product' | 'general' | 'custom_request' | 'review' | 'promotion' | 'system' | 'info' | 'success' | 'warning';
   title: string;
-  message: string;
+  message?: string;
+  body?: string;
   read: boolean;
   createdAt: any;
   orderId?: string;
@@ -30,6 +30,7 @@ interface Notification {
   priority?: 'low' | 'medium' | 'high';
   metadata?: any;
 }
+
 
 export default function NotificationsPage() {
   const { user, loading: authLoading } = useAuth();
@@ -146,6 +147,11 @@ export default function NotificationsPage() {
         return <Sparkles {...iconProps} className="text-indigo-600" />;
       default:
         return <Bell {...iconProps} className="text-gray-600" />;
+        case 'info':
+        case 'success':
+       case 'warning':
+  return <Bell {...iconProps} className="text-gray-600" />;
+
     }
   };
 
@@ -365,7 +371,8 @@ export default function NotificationsPage() {
                         </div>
                       </div>
                       
-                      <p className="text-gray-700 mb-3 leading-relaxed">{notif.message}</p>
+                     <p className="text-gray-700 mb-3 leading-relaxed"> {notif.message || notif.body} </p>
+
 
                       {/* Image Preview */}
                       {notif.imageUrl && (

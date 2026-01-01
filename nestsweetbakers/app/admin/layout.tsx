@@ -31,7 +31,8 @@ import {
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { user, isAdmin, isSuperAdmin, signOut } = useAuth();
+ const { user, isAdmin, isSuperAdmin, loading, signOut } = useAuth();
+
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -116,25 +117,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [user, isAdmin]);
 
   useEffect(() => {
-    if (user && !isAdmin) {
-      router.replace('/');
-    }
-  }, [user, isAdmin, router]);
+  // Wait for auth to finish
+  if (loading) return;
 
-  if (!user || !isAdmin) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
-        <div className="text-center">
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            <div className="absolute inset-0 border-4 border-pink-200 rounded-full animate-ping"></div>
-            <div className="relative w-24 h-24 border-4 border-pink-600 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-          <p className="text-gray-600 font-semibold text-lg">Loading admin panel...</p>
-          <p className="text-gray-500 text-sm mt-2">Verifying credentials...</p>
-        </div>
-      </div>
-    );
+  const hasAccess = user && (isAdmin || isSuperAdmin);
+  if (!hasAccess) {
+    router.replace('/'); // or '/login' if you prefer
   }
+}, [loading, user, isAdmin, isSuperAdmin, router]);
+
+
+ // While auth is loading, show loader
+if (loading) {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
+      <div className="text-center">
+        <div className="relative w-24 h-24 mx-auto mb-6">
+          <div className="absolute inset-0 border-4 border-pink-200 rounded-full animate-ping"></div>
+          <div className="relative w-24 h-24 border-4 border-pink-600 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+        <p className="text-gray-600 font-semibold text-lg">Loading admin panel...</p>
+        <p className="text-gray-500 text-sm mt-2">Verifying credentials...</p>
+      </div>
+    </div>
+  );
+}
+
+// After loading, if still no access, block
+if (!user || (!isAdmin && !isSuperAdmin)) {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-50 to-purple-50">
+      <div className="text-center">
+        <p className="text-gray-600 font-semibold text-lg">
+          You do not have permission to access the admin panel.
+        </p>
+      </div>
+    </div>
+  );
+}
 
   const navItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin', badge: null },
