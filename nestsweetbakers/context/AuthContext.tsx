@@ -12,7 +12,7 @@ import {
   updateProfile,
   User
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs, writeBatch, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
 interface AuthContextType {
@@ -27,6 +27,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   linkGuestOrders: (userId: string, email?: string, phone?: string) => Promise<number>;
   claimOrderByRef: (orderRef: string, userId: string) => Promise<boolean>;
+    claimOrderById: (orderId: string) => Promise<boolean>; // ✅
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -200,6 +201,64 @@ return linkedCount;
     return 0;
   }
 }, []);
+
+// ✅ Claim order by Firestore document ID
+const claimOrderById = useCallback(async (orderId: string): Promise<boolean> => {
+  if (!user) {
+    throw new Error('Must be logged in to claim orders');
+  }
+
+  try {
+    console.log('🔗 Claiming order by ID:', orderId);
+    
+    // Get the order
+    const orderRef = doc(db, 'orders', orderId);
+    const orderDoc = await getDoc(orderRef);
+
+    if (!orderDoc.exists()) {
+      console.error('❌ Order not found');
+      return false;
+    }
+
+    const orderData = orderDoc.data();
+
+    // Check if order is already claimed by another user
+    if (orderData.userId && orderData.userId !== 'guest' && orderData.userId !== user.uid) {
+      console.error('❌ Order already claimed by another user');
+      return false;
+    }
+
+    // Check if already claimed by current user
+    if (orderData.userId === user.uid && !orderData.isGuest) {
+      console.log('ℹ️ Order already claimed by this user');
+      return true;
+    }
+
+    // Update order with user info
+    await updateDoc(orderRef, {
+      userId: user.uid,
+      userName: user.displayName || user.email || 'User',
+      userEmail: user.email,
+      isGuest: false,
+      claimedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    console.log(`✅ Successfully claimed order ${orderId}`);
+    
+    // Trigger refresh event
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ordersLinked', { 
+        detail: { count: 1 } 
+      }));
+    }
+    
+    return true;
+  } catch (error: any) {
+    console.error('❌ Error claiming order:', error);
+    return false;
+  }
+}, [user]);
 
 
   // ✅ NEW: Claim order by reference code
@@ -469,22 +528,24 @@ return linkedCount;
   }
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      loading, 
-      isAdmin, 
-      isSuperAdmin, 
-      signIn, 
-      signInWithEmail,
-      signUpWithEmail,
-      resetPassword,
-      signOut,
-      linkGuestOrders,
-      claimOrderByRef
-    }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  <AuthContext.Provider value={{ 
+    user, 
+    loading, 
+    isAdmin, 
+    isSuperAdmin, 
+    signIn, 
+    signInWithEmail,
+    signUpWithEmail,
+    resetPassword,
+    signOut,
+    linkGuestOrders,
+    claimOrderByRef,
+    claimOrderById // ✅ ADD THIS LINE
+  }}>
+    {children}
+  </AuthContext.Provider>
+);
+
 }
 
 export function useAuth() {

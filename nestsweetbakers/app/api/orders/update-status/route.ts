@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { sendOrderStatusUpdate } from '@/lib/twilioService';
+
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,3 +58,7 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+function sendOrderStatusUpdate(phone: any, orderRef: any, status: any, name: any) {
+  throw new Error('Function not implemented.');
+}
+

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { User, Mail, Phone, MapPin, Edit2, Save, X } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit2, Save, X, Lock } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/context/ToastContext';
 
@@ -57,7 +57,6 @@ export default function ProfilePage() {
           photoURL: data.photoURL || ''
         });
       } else {
-        // Initialize with auth data
         setProfile({
           displayName: user.displayName || '',
           email: user.email || '',
@@ -89,7 +88,6 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!user || !profile) return;
 
-    // Validation
     if (!profile.displayName.trim()) {
       showError('Please enter your name');
       return;
@@ -315,7 +313,8 @@ export default function ProfilePage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* My Orders */}
           <button
             onClick={() => router.push('/orders')}
             className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition text-left group transform hover:-translate-y-1 duration-300"
@@ -331,6 +330,7 @@ export default function ProfilePage() {
             </div>
           </button>
 
+          {/* Browse Cakes */}
           <button
             onClick={() => router.push('/cakes')}
             className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition text-left group transform hover:-translate-y-1 duration-300"
@@ -346,6 +346,7 @@ export default function ProfilePage() {
             </div>
           </button>
 
+          {/* Custom Order */}
           <button
             onClick={() => router.push('/custom-cakes')}
             className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition text-left group transform hover:-translate-y-1 duration-300"
@@ -360,6 +361,50 @@ export default function ProfilePage() {
               </div>
             </div>
           </button>
+
+          {/* Set/Change Password - Only for Google users */}
+          {user?.providerData.some(p => p.providerId === 'google.com') && (
+            <button
+              onClick={() => router.push('/set-password')}
+              className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition text-left group transform hover:-translate-y-1 duration-300"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition">
+                  <Lock className="text-green-600" size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold">
+                    {user?.providerData.some(p => p.providerId === 'password')
+                      ? 'Change Password'
+                      : 'Set Password'}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    {user?.providerData.some(p => p.providerId === 'password')
+                      ? 'Update your password'
+                      : 'Enable email sign-in'}
+                  </p>
+                </div>
+              </div>
+            </button>
+          )}
+
+          {/* Account Settings - Only for non-Google users */}
+          {!user?.providerData.some(p => p.providerId === 'google.com') && (
+            <button
+              onClick={() => router.push('/settings')}
+              className="bg-white p-6 rounded-xl shadow-lg hover:shadow-2xl transition text-left group transform hover:-translate-y-1 duration-300"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition">
+                  <User className="text-gray-600" size={24} />
+                </div>
+                <div>
+                  <h3 className="font-bold">Settings</h3>
+                  <p className="text-sm text-gray-600">Account preferences</p>
+                </div>
+              </div>
+            </button>
+          )}
         </div>
       </div>
     </div>

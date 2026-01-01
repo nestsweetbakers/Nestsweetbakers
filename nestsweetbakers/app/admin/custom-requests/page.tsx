@@ -113,18 +113,69 @@ export default function CustomRequestsPage() {
     setFilteredRequests(result);
   }, [requests, statusFilter, searchTerm]);
 
-  const updateStatus = async (id: string, status: string) => {
+  // ✅ Generate WhatsApp message for status update
+  const generateStatusMessage = (request: CustomRequest, newStatus: string) => {
+    let statusMessage = '';
+    
+    switch (newStatus) {
+      case 'processing':
+        statusMessage = `🔄 Your custom ${request.occasion} cake request is now being processed!\n\n` +
+                       `We're reviewing your design requirements and will get back to you shortly.`;
+        break;
+      case 'approved':
+        statusMessage = `✅ Great news! Your custom ${request.occasion} cake request has been approved!\n\n` +
+                       `💰 Quoted Price: ₹${request.quotedPrice || request.budget}\n` +
+                       `📅 Delivery Date: ${new Date(request.deliveryDate).toLocaleDateString('en-IN')}\n\n` +
+                       (request.adminNotes ? `📝 Notes: ${request.adminNotes}\n\n` : '') +
+                       `We'll contact you soon to confirm the order.`;
+        break;
+      case 'rejected':
+        statusMessage = `❌ We're sorry, but we cannot fulfill your custom ${request.occasion} cake request at this time.\n\n` +
+                       (request.adminNotes ? `Reason: ${request.adminNotes}\n\n` : '') +
+                       `Please feel free to contact us for alternative designs or requirements.`;
+        break;
+      case 'completed':
+        statusMessage = `🎉 Your custom ${request.occasion} cake is ready for delivery!\n\n` +
+                       `Thank you for choosing NestSweet Bakers. We hope you love your cake! 🍰`;
+        break;
+      default:
+        statusMessage = `📋 Update on your custom ${request.occasion} cake request.\n\n` +
+                       `Status: ${newStatus}\n\n` +
+                       `We'll keep you updated on any progress.`;
+    }
+
+    const message = encodeURIComponent(
+      `Hello ${request.name},\n\n${statusMessage}\n\n` +
+      `Request ID: #${request.id.slice(0, 8)}\n\n` +
+      `For any queries, feel free to contact us.\n\n` +
+      `- NestSweet Bakers Team 🍰`
+    );
+    
+    return message;
+  };
+
+  // ✅ Updated updateStatus function with WhatsApp notification
+  const updateStatus = async (id: string, status: string, sendWhatsApp: boolean = false) => {
     try {
       await updateDoc(doc(db, 'customRequests', id), {
         status,
         updatedAt: serverTimestamp(),
       });
 
+      const updatedRequest = requests.find(r => r.id === id);
+      
       setRequests(requests.map(request =>
         request.id === id ? { ...request, status: status as any } : request
       ));
 
       showSuccess(`✅ Request status updated to ${status}`);
+
+      // ✅ Open WhatsApp with pre-filled message if requested
+      if (sendWhatsApp && updatedRequest && updatedRequest.phone) {
+        const message = generateStatusMessage(updatedRequest, status);
+        const whatsappUrl = `https://wa.me/${updatedRequest.phone.replace(/[^0-9]/g, '')}?text=${message}`;
+        window.open(whatsappUrl, '_blank');
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       showError('❌ Failed to update status');
@@ -754,53 +805,71 @@ export default function CustomRequestsPage() {
                     )}
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex flex-wrap gap-3">
-                    <select
-                      value={request.status}
-                      onChange={(e) => updateStatus(request.id, e.target.value)}
-                      className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent font-semibold"
-                    >
-                      {STATUS_OPTIONS.map(status => (
-                        <option key={status.value} value={status.value}>
-                          {status.label}
-                        </option>
-                      ))}
-                    </select>
+                  {/* ✅ UPDATED: Actions with WhatsApp Status Notification */}
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-bold text-gray-800 mb-3">Update Status</h4>
+                      <div className="flex flex-wrap gap-3">
+                        {STATUS_OPTIONS.map(status => (
+                          <button
+                            key={status.value}
+                            onClick={() => updateStatus(request.id, status.value, true)}
+                            className={`px-6 py-3 rounded-xl font-semibold flex items-center gap-2 transition-all ${
+                              request.status === status.value
+                                ? status.color + ' border-2'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                          >
+                            {getStatusIcon(status.value)}
+                            {status.label}
+                            {request.status === status.value && ' ✓'}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        💡 Clicking a status will open WhatsApp with a pre-filled message to the customer
+                      </p>
+                    </div>
 
-                    <button
-                      onClick={() => convertToOrder(request)}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-semibold flex items-center gap-2"
-                    >
-                      <Package size={18} />
-                      Convert to Order
-                    </button>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        onClick={() => convertToOrder(request)}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-semibold flex items-center gap-2"
+                      >
+                        <Package size={18} />
+                        Convert to Order
+                      </button>
 
-                    <a
-                      href={`tel:${request.phone}`}
-                      className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold flex items-center gap-2"
-                    >
-                      <Phone size={18} />
-                      Call
-                    </a>
+                      {request.phone && (
+                        <>
+                          <a
+                            href={`tel:${request.phone}`}
+                            className="px-6 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition font-semibold flex items-center gap-2"
+                          >
+                            <Phone size={18} />
+                            Call
+                          </a>
 
-                    <a
-                      href={`https://wa.me/${request.phone.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition font-semibold flex items-center gap-2"
-                    >
-                      <MessageCircle size={18} />
-                      WhatsApp
-                    </a>
+                          <a
+                            href={`https://wa.me/${request.phone.replace(/[^0-9]/g, '')}?text=${generateStatusMessage(request, request.status)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-6 py-3 bg-green-500 text-white rounded-xl hover:bg-green-600 transition font-semibold flex items-center gap-2"
+                          >
+                            <MessageCircle size={18} />
+                            WhatsApp
+                          </a>
+                        </>
+                      )}
 
-                    <button
-                      onClick={() => handleDelete(request.id)}
-                      className="px-6 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition font-semibold flex items-center gap-2"
-                    >
-                      <Trash2 size={18} />
-                      Delete
-                    </button>
+                      <button
+                        onClick={() => handleDelete(request.id)}
+                        className="px-6 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition font-semibold flex items-center gap-2"
+                      >
+                        <Trash2 size={18} />
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

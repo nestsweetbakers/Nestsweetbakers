@@ -29,7 +29,8 @@ export default function ClaimOrderPage() {
 
     setClaiming(true);
     try {
-      const success = await claimOrderById(orderRef, user.uid);
+     const success = await claimOrderById(orderRef);
+
       
       if (success) {
         showSuccess('✅ Order successfully added to your account!');

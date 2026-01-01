@@ -11,6 +11,7 @@ function LoginContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { user, signIn, signInWithEmail } = useAuth();
   const { showError, showSuccess, showInfo } = useToast();
   const router = useRouter();
@@ -28,7 +29,7 @@ function LoginContent() {
     
     switch (errorCode) {
       case 'auth/popup-closed-by-user':
-        return null; // Don't show error for user cancellation
+        return null;
       case 'auth/popup-blocked':
         return 'Popup blocked. Please allow popups for this site.';
       case 'auth/invalid-credential':
@@ -52,40 +53,45 @@ function LoginContent() {
     }
   };
 
- const handleEmailLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (!email || !password) {
-    showError('Please enter both email and password');
-    return;
-  }
-
-  setLoading(true);
-  setError('');
-
-  try {
-    await signInWithEmail(email, password);
-    showSuccess('Welcome back! 🎉');
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
     
-    // Check for redirect
-    const redirect = searchParams.get('redirect');
-    if (redirect) {
-      router.push(redirect);
-    } else {
-      router.push('/');
+    if (!email || !password) {
+      showError('Please enter both email and password');
+      return;
     }
-  } catch (error: any) {
-    console.error('Login error:', error);
-    
-    // Show user-friendly error message
-    const errorMessage = error.message || 'Failed to sign in. Please try again.';
-    setError(errorMessage);
-    showError(errorMessage);
-  } finally {
-    setLoading(false);
-  }
-};
 
+    setLoading(true);
+    setError('');
+
+    try {
+      await signInWithEmail(email, password);
+      showSuccess('Welcome back! 🎉');
+      
+      const redirect = searchParams.get('redirect');
+      if (redirect) {
+        router.push(redirect);
+      } else {
+        router.push('/');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      if (error.code === 'auth/invalid-credential') {
+        setError(
+          'Account not found with email/password. Did you sign up with Google? ' +
+          'Sign in with Google or set up a password first.'
+        );
+        showError('Try signing in with Google instead');
+      } else {
+        const errorMessage = error.message || 'Failed to sign in. Please try again.';
+        setError(errorMessage);
+        showError(errorMessage);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -98,14 +104,12 @@ function LoginContent() {
         
         const redirect = searchParams.get('redirect') || '/';
         
-        // Show info about linking orders
         setTimeout(() => {
           showInfo('Checking for guest orders to link...');
         }, 500);
         
         router.push(redirect);
       } else {
-        // Don't show error if user cancelled
         if (!result.userCancelled) {
           const errorMsg = getErrorMessage({ code: result.error });
           if (errorMsg) showError(errorMsg);
@@ -140,8 +144,17 @@ function LoginContent() {
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8 space-y-6">
-          {/* Email Login Form */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
+            {error && (
+              <div className="p-4 bg-red-50 border-2 border-red-200 rounded-xl flex items-start gap-3">
+                <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+                <div>
+                  <p className="text-sm font-semibold text-red-900 mb-1">Sign In Failed</p>
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+              </div>
+            )}
+
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
@@ -217,7 +230,6 @@ function LoginContent() {
             </div>
           </div>
 
-          {/* Google Sign In */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
@@ -238,7 +250,17 @@ function LoginContent() {
             )}
           </button>
 
-          {/* Guest Order Info Box */}
+          {/* ✅ NEW: Help text for Google users */}
+          <div className="text-center">
+            <p className="text-xs text-gray-500">
+              Signed up with Google?{' '}
+              <Link href="/set-password" className="text-pink-600 hover:underline font-semibold">
+                Set up a password
+              </Link>{' '}
+              after signing in
+            </p>
+          </div>
+
           <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-xl">
             <div className="flex items-start gap-3">
               <AlertCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={20} />
@@ -260,7 +282,6 @@ function LoginContent() {
             </div>
           </div>
 
-          {/* Sign Up Link */}
           <p className="text-center text-sm text-gray-600">
             Don&apos;t have an account?{' '}
             <Link href="/signup" className="text-pink-600 hover:text-pink-700 font-semibold">
@@ -268,7 +289,6 @@ function LoginContent() {
             </Link>
           </p>
 
-          {/* Guest Checkout Option */}
           <div className="text-center pt-4 border-t">
             <p className="text-sm text-gray-600 mb-2">or</p>
             <Link
@@ -280,7 +300,6 @@ function LoginContent() {
           </div>
         </div>
 
-        {/* Additional Links */}
         <div className="text-center space-y-2">
           <Link href="/track-order" className="block text-sm text-gray-600 hover:text-pink-600">
             Track Order Without Account
@@ -302,7 +321,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-function setError(arg0: string) {
-  throw new Error('Function not implemented.');
-}
-

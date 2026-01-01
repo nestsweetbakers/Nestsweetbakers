@@ -5,12 +5,11 @@ import { collection, getDocs, updateDoc, deleteDoc, doc, orderBy, query, serverT
 import { db } from '@/lib/firebase';
 import { useToast } from '@/context/ToastContext';
 import { notificationService } from '@/lib/notificationService';
-import { 
-  Package, Search, Download, Phone, Mail, MapPin, Calendar, Loader2, 
-  Eye, ChevronDown, ChevronUp, Trash2, CheckSquare, Square, Grid3x3, List,
-  Printer, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle,
-  Gift, FileText, CreditCard, Truck, User, ShoppingCart, DollarSign,
-  MessageCircle, TrendingUp, Percent, Info
+import {
+  Package, Search, Download, Phone, Mail, MapPin, Calendar, Loader2, Eye,
+  ChevronDown, ChevronUp, Trash2, CheckSquare, Square, Grid3x3, List, Printer,
+  RefreshCw, Clock, CheckCircle, XCircle, AlertCircle, Gift, FileText, CreditCard,
+  Truck, User, ShoppingCart, DollarSign, MessageCircle, TrendingUp, Percent, Info
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -52,23 +51,17 @@ interface Order {
   userName: string;
   userEmail?: string;
   userPhone: string;
-  
   items: OrderItem[];
-  
   customerInfo: CustomerInfo;
-  
   deliveryDate: string;
   deliveryTime: string;
   deliveryAddress: string;
-  
   isGift: boolean;
   recipientName?: string;
   giftMessage?: string;
   occasionType?: string;
-  
   specialInstructions?: string;
   orderNote?: string;
-  
   subtotal: number;
   deliveryFee: number;
   packagingFee: number;
@@ -76,17 +69,13 @@ interface Order {
   discount: number;
   promoCode?: string;
   total: number;
-  
   paymentMethod: 'whatsapp' | 'online' | 'cod';
   paymentStatus: string;
-  
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
   orderStatus: string;
   trackingSteps: TrackingSteps;
-  
   source: string;
   deviceInfo?: any;
-  
   createdAt: any;
   updatedAt?: any;
 }
@@ -119,6 +108,7 @@ export default function AdminOrdersPage() {
     status?: string;
     isBulk?: boolean;
   }>({ show: false, id: '', type: 'delete', isBulk: false });
+
   const { showSuccess, showError } = useToast();
 
   const fetchOrders = useCallback(async () => {
@@ -130,12 +120,12 @@ export default function AdminOrdersPage() {
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.() || new Date(doc.data().createdAt || Date.now()),
       } as Order));
-      
+
       setOrders(ordersData);
       setFilteredOrders(ordersData);
     } catch (error) {
       console.error('Error fetching orders:', error);
-      showError('❌ Failed to load orders');
+      showError('Failed to load orders');
     } finally {
       setLoading(false);
     }
@@ -156,10 +146,9 @@ export default function AdminOrdersPage() {
     if (dateFilter !== 'all') {
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      
+
       result = result.filter(order => {
         const orderDate = order.createdAt;
-        
         switch (dateFilter) {
           case 'today':
             return orderDate >= today;
@@ -207,22 +196,15 @@ export default function AdminOrdersPage() {
 
   const updateOrderStatus = async (orderId: string, newStatus: string, skipConfirm = false) => {
     if (!skipConfirm && (newStatus === 'cancelled' || newStatus === 'completed')) {
-      setConfirmModal({
-        show: true,
-        id: orderId,
-        type: 'status',
-        status: newStatus,
-        isBulk: false
-      });
+      setConfirmModal({ show: true, id: orderId, type: 'status', status: newStatus, isBulk: false });
       return;
     }
 
     setUpdating(orderId);
-    
     try {
       const updatedOrder = orders.find(o => o.id === orderId);
       const oldStatus = updatedOrder?.status;
-      
+
       await updateDoc(doc(db, 'orders', orderId), {
         status: newStatus,
         updatedAt: serverTimestamp(),
@@ -239,14 +221,14 @@ export default function AdminOrdersPage() {
           customerName: updatedOrder.userName,
           cakeName: updatedOrder.items[0]?.cakeName || 'Order',
           oldStatus: oldStatus!,
-          newStatus
-        }).catch(err => console.error('Failed to send notification:', err));
+          newStatus,
+        }).catch(err => console.error('Failed to send notification', err));
       }
 
       showSuccess(`✅ Order status updated to ${newStatus}`);
     } catch (error) {
       console.error('Error updating order:', error);
-      showError('❌ Failed to update order status');
+      showError('Failed to update order status');
     } finally {
       setUpdating(null);
     }
@@ -254,7 +236,7 @@ export default function AdminOrdersPage() {
 
   const handleBulkStatusUpdate = async (newStatus: string) => {
     if (selectedOrders.size === 0) {
-      showError('❌ Please select orders first');
+      showError('Please select orders first');
       return;
     }
 
@@ -263,9 +245,10 @@ export default function AdminOrdersPage() {
       selectedOrders.forEach(orderId => {
         batch.update(doc(db, 'orders', orderId), {
           status: newStatus,
-          updatedAt: serverTimestamp()
+          updatedAt: serverTimestamp(),
         });
       });
+
       await batch.commit();
 
       setOrders(orders.map(order =>
@@ -277,7 +260,7 @@ export default function AdminOrdersPage() {
       showSuccess(`✅ ${selectedOrders.size} orders updated to ${newStatus}`);
     } catch (error) {
       console.error('Error:', error);
-      showError('❌ Failed to update orders');
+      showError('Failed to update orders');
     }
   };
 
@@ -287,6 +270,7 @@ export default function AdminOrdersPage() {
       Array.from(selectedOrders).forEach(orderId => {
         batch.delete(doc(db, 'orders', orderId));
       });
+
       await batch.commit();
 
       setOrders(orders.filter(o => !selectedOrders.has(o.id)));
@@ -296,7 +280,7 @@ export default function AdminOrdersPage() {
       setConfirmModal({ show: false, id: '', type: 'delete', isBulk: false });
     } catch (error) {
       console.error('Error:', error);
-      showError('❌ Failed to delete orders');
+      showError('Failed to delete orders');
     }
   };
 
@@ -319,7 +303,7 @@ export default function AdminOrdersPage() {
   };
 
   const printInvoice = (order: Order) => {
-    const itemsList = order.items.map((item, idx) => 
+    const itemsList = order.items.map((item, idx) =>
       `<div class="row"><span>${idx + 1}. ${item.cakeName} (${item.weight})</span><span>₹${item.totalPrice}</span></div>`
     ).join('');
 
@@ -343,58 +327,59 @@ export default function AdminOrdersPage() {
           <h1>NestSweet Bakers</h1>
           <p>Order Invoice</p>
         </div>
+
         <div class="section">
           <h2>Order #${order.orderRef}</h2>
-          <div class="row"><span>Order Date:</span><span>${new Date(order.createdAt).toLocaleDateString('en-IN')}</span></div>
-          <div class="row"><span>Delivery Date:</span><span>${new Date(order.deliveryDate).toLocaleDateString('en-IN')}</span></div>
-          <div class="row"><span>Delivery Time:</span><span>${order.deliveryTime === 'morning' ? '9 AM - 12 PM' : order.deliveryTime === 'afternoon' ? '12 PM - 4 PM' : '4 PM - 8 PM'}</span></div>
-          <div class="row"><span>Payment Method:</span><span>${order.paymentMethod.toUpperCase()}</span></div>
+          <div class="row"><span>Order Date</span><span>${new Date(order.createdAt).toLocaleDateString('en-IN')}</span></div>
+          <div class="row"><span>Delivery Date</span><span>${new Date(order.deliveryDate).toLocaleDateString('en-IN')}</span></div>
+          <div class="row"><span>Delivery Time</span><span>${order.deliveryTime === 'morning' ? '9 AM - 12 PM' : order.deliveryTime === 'afternoon' ? '12 PM - 4 PM' : '4 PM - 8 PM'}</span></div>
+          <div class="row"><span>Payment Method</span><span>${order.paymentMethod.toUpperCase()}</span></div>
         </div>
-        
+
         <div class="section">
           <h3>Customer Details</h3>
-          <div class="row"><span>Name:</span><span>${order.userName}</span></div>
-          <div class="row"><span>Phone:</span><span>${order.userPhone}</span></div>
-          ${order.userEmail ? `<div class="row"><span>Email:</span><span>${order.userEmail}</span></div>` : ''}
-          <div class="row"><span>Address:</span><span>${order.deliveryAddress}</span></div>
-          ${order.customerInfo.city ? `<div class="row"><span>City:</span><span>${order.customerInfo.city}, ${order.customerInfo.pincode}</span></div>` : ''}
+          <div class="row"><span>Name</span><span>${order.userName}</span></div>
+          <div class="row"><span>Phone</span><span>${order.userPhone || 'N/A'}</span></div>
+          ${order.userEmail ? `<div class="row"><span>Email</span><span>${order.userEmail}</span></div>` : ''}
+          <div class="row"><span>Address</span><span>${order.deliveryAddress}</span></div>
+          ${order.customerInfo.city ? `<div class="row"><span>City</span><span>${order.customerInfo.city}, ${order.customerInfo.pincode}</span></div>` : ''}
         </div>
 
         ${order.isGift ? `
-        <div class="section" style="background: #fff3e0;">
-          <h3>🎁 Gift Order</h3>
-          <div class="row"><span>Recipient:</span><span>${order.recipientName}</span></div>
-          <div class="row"><span>Occasion:</span><span>${order.occasionType}</span></div>
-          ${order.giftMessage ? `<div class="row"><span>Message:</span><span>${order.giftMessage}</span></div>` : ''}
-        </div>
+          <div class="section" style="background: #fff3e0;">
+            <h3>🎁 Gift Order</h3>
+            <div class="row"><span>Recipient</span><span>${order.recipientName}</span></div>
+            <div class="row"><span>Occasion</span><span>${order.occasionType}</span></div>
+            ${order.giftMessage ? `<div class="row"><span>Message</span><span>${order.giftMessage}</span></div>` : ''}
+          </div>
         ` : ''}
-        
+
         <div class="section">
           <h3>Order Items</h3>
           ${itemsList}
         </div>
-        
+
         ${order.specialInstructions || order.orderNote ? `
-        <div class="section">
-          <h3>Special Instructions</h3>
-          ${order.specialInstructions ? `<p><strong>Instructions:</strong> ${order.specialInstructions}</p>` : ''}
-          ${order.orderNote ? `<p><strong>Note:</strong> ${order.orderNote}</p>` : ''}
-        </div>
+          <div class="section">
+            <h3>Special Instructions</h3>
+            ${order.specialInstructions ? `<p><strong>Instructions:</strong> ${order.specialInstructions}</p>` : ''}
+            ${order.orderNote ? `<p><strong>Note:</strong> ${order.orderNote}</p>` : ''}
+          </div>
         ` : ''}
-        
+
         <div class="section">
           <h3>Payment Breakdown</h3>
-          <div class="row"><span>Subtotal:</span><span>₹${order.subtotal}</span></div>
-          <div class="row"><span>Delivery Fee:</span><span>₹${order.deliveryFee}</span></div>
-          <div class="row"><span>Packaging Fee:</span><span>₹${order.packagingFee}</span></div>
-          ${order.tax > 0 ? `<div class="row"><span>Tax:</span><span>₹${order.tax.toFixed(2)}</span></div>` : ''}
-          ${order.discount > 0 ? `<div class="row"><span>Discount (${order.promoCode}):</span><span>-₹${order.discount}</span></div>` : ''}
-          <div class="row total"><span>Total Amount:</span><span>₹${order.total.toFixed(2)}</span></div>
+          <div class="row"><span>Subtotal</span><span>₹${order.subtotal}</span></div>
+          <div class="row"><span>Delivery Fee</span><span>₹${order.deliveryFee}</span></div>
+          <div class="row"><span>Packaging Fee</span><span>₹${order.packagingFee}</span></div>
+          ${order.tax > 0 ? `<div class="row"><span>Tax</span><span>₹${order.tax.toFixed(2)}</span></div>` : ''}
+          ${order.discount > 0 ? `<div class="row"><span>Discount${order.promoCode ? ` (${order.promoCode})` : ''}</span><span>-₹${order.discount}</span></div>` : ''}
+          <div class="row total"><span>Total Amount</span><span>₹${order.total.toFixed(2)}</span></div>
         </div>
       </body>
       </html>
     `;
-    
+
     const printWindow = window.open('', '', 'width=800,height=600');
     printWindow?.document.write(printContent);
     printWindow?.document.close();
@@ -407,7 +392,7 @@ export default function AdminOrdersPage() {
       order.orderRef,
       new Date(order.createdAt).toLocaleDateString('en-IN'),
       order.userName,
-      order.userPhone,
+      order.userPhone || 'N/A',
       order.userEmail || '',
       order.items.map(i => i.cakeName).join('; '),
       order.items.reduce((sum, i) => sum + i.quantity, 0),
@@ -419,7 +404,7 @@ export default function AdminOrdersPage() {
       order.promoCode || ''
     ]);
 
-    const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const csvContent = [headers, ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -427,7 +412,7 @@ export default function AdminOrdersPage() {
     link.download = `orders_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
     URL.revokeObjectURL(url);
-    
+
     showSuccess('✅ Orders exported successfully');
   };
 
@@ -438,6 +423,22 @@ export default function AdminOrdersPage() {
   const getStatusIcon = (status: string) => {
     const StatusIcon = STATUS_OPTIONS.find(s => s.value === status)?.icon || Clock;
     return <StatusIcon size={16} />;
+  };
+
+  // ✅ Generate WhatsApp message with order details
+  const generateWhatsAppMessage = (order: Order) => {
+    const message = encodeURIComponent(
+      `Hello ${order.userName},\n\n` +
+      `Your order #${order.orderRef} has been received!\n\n` +
+      `📦 Order Details:\n` +
+      order.items.map(item => `• ${item.cakeName} (${item.weight}) x${item.quantity}`).join('\n') +
+      `\n\n💰 Total: ₹${order.total}\n` +
+      `📅 Delivery: ${new Date(order.deliveryDate).toLocaleDateString('en-IN')}\n` +
+      `⏰ Time: ${order.deliveryTime === 'morning' ? '9 AM - 12 PM' : order.deliveryTime === 'afternoon' ? '12 PM - 4 PM' : '4 PM - 8 PM'}\n\n` +
+      `We'll keep you updated on your order status.\n\n` +
+      `Thank you for choosing NestSweet Bakers! 🍰`
+    );
+    return message;
   };
 
   const stats = {
@@ -476,10 +477,9 @@ export default function AdminOrdersPage() {
               {confirmModal.type === 'delete' ? 'Delete Orders?' : 'Update Order Status?'}
             </h3>
             <p className="text-gray-600 text-center mb-6">
-              {confirmModal.type === 'delete' 
+              {confirmModal.type === 'delete'
                 ? `Are you sure you want to delete ${confirmModal.isBulk ? `${selectedOrders.size} orders` : 'this order'}? This action cannot be undone.`
-                : `Update order status to "${confirmModal.status}"?`
-              }
+                : `Update order status to "${confirmModal.status}"?`}
             </p>
             <div className="flex gap-3">
               <button
@@ -494,8 +494,8 @@ export default function AdminOrdersPage() {
                     handleBulkDelete();
                   } else if (confirmModal.type === 'status' && confirmModal.status) {
                     updateOrderStatus(confirmModal.id as string, confirmModal.status, true);
-                    setConfirmModal({ show: false, id: '', type: 'delete', isBulk: false });
                   }
+                  setConfirmModal({ show: false, id: '', type: 'delete', isBulk: false });
                 }}
                 className="flex-1 px-4 py-3 bg-pink-600 text-white rounded-xl font-semibold hover:bg-pink-700 transition-all"
               >
@@ -517,6 +517,7 @@ export default function AdminOrdersPage() {
             Manage and track all customer orders
           </p>
         </div>
+
         <button
           onClick={exportToCSV}
           className="flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700 transition-all font-semibold shadow-lg"
@@ -532,22 +533,27 @@ export default function AdminOrdersPage() {
           <p className="text-gray-600 text-sm font-medium">Total Orders</p>
           <p className="text-2xl font-bold text-gray-800 mt-1">{stats.total}</p>
         </div>
+
         <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl shadow-lg p-4 border-2 border-yellow-200">
           <p className="text-yellow-700 text-sm font-medium">Pending</p>
           <p className="text-2xl font-bold text-yellow-800 mt-1">{stats.pending}</p>
         </div>
+
         <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-lg p-4 border-2 border-blue-200">
           <p className="text-blue-700 text-sm font-medium">Processing</p>
           <p className="text-2xl font-bold text-blue-800 mt-1">{stats.processing}</p>
         </div>
+
         <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl shadow-lg p-4 border-2 border-green-200">
           <p className="text-green-700 text-sm font-medium">Completed</p>
           <p className="text-2xl font-bold text-green-800 mt-1">{stats.completed}</p>
         </div>
+
         <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl shadow-lg p-4 border-2 border-red-200">
           <p className="text-red-700 text-sm font-medium">Cancelled</p>
           <p className="text-2xl font-bold text-red-800 mt-1">{stats.cancelled}</p>
         </div>
+
         <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl shadow-lg p-4 border-2 border-purple-200">
           <p className="text-purple-700 text-sm font-medium">Revenue</p>
           <p className="text-2xl font-bold text-purple-800 mt-1">₹{stats.totalRevenue.toFixed(0)}</p>
@@ -567,6 +573,7 @@ export default function AdminOrdersPage() {
               className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
             />
           </div>
+
           <div className="md:col-span-3">
             <select
               value={statusFilter}
@@ -581,6 +588,7 @@ export default function AdminOrdersPage() {
               ))}
             </select>
           </div>
+
           <div className="md:col-span-2">
             <select
               value={dateFilter}
@@ -593,6 +601,7 @@ export default function AdminOrdersPage() {
               <option value="month">This Month</option>
             </select>
           </div>
+
           <div className="md:col-span-3">
             <select
               value={`${sortBy}-${sortOrder}`}
@@ -622,7 +631,7 @@ export default function AdminOrdersPage() {
               }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold transition-all ${
                 bulkActionMode 
-                  ? 'bg-pink-100 text-pink-700 border-2 border-pink-200' 
+                  ? 'bg-pink-100 text-pink-700 border-2 border-pink-200'
                   : 'bg-gray-100 text-gray-700 border-2 border-gray-200'
               }`}
             >
@@ -638,14 +647,13 @@ export default function AdminOrdersPage() {
                 >
                   {selectedOrders.size === filteredOrders.length ? 'Deselect All' : 'Select All'}
                 </button>
+
                 {selectedOrders.size > 0 && (
                   <>
                     <select
                       onChange={(e) => {
-                        if (e.target.value) {
-                          handleBulkStatusUpdate(e.target.value);
-                          e.target.value = '';
-                        }
+                        if (e.target.value) handleBulkStatusUpdate(e.target.value);
+                        e.target.value = '';
                       }}
                       className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold"
                     >
@@ -654,6 +662,7 @@ export default function AdminOrdersPage() {
                         <option key={s.value} value={s.value}>{s.label}</option>
                       ))}
                     </select>
+
                     <button
                       onClick={() => setConfirmModal({ show: true, id: Array.from(selectedOrders), type: 'delete', isBulk: true })}
                       className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700"
@@ -671,9 +680,7 @@ export default function AdminOrdersPage() {
             <button
               onClick={() => setViewMode('list')}
               className={`p-2 rounded-lg transition-all ${
-                viewMode === 'list' 
-                  ? 'bg-pink-600 text-white' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                viewMode === 'list' ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <List size={20} />
@@ -681,9 +688,7 @@ export default function AdminOrdersPage() {
             <button
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded-lg transition-all ${
-                viewMode === 'grid' 
-                  ? 'bg-pink-600 text-white' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                viewMode === 'grid' ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
               <Grid3x3 size={20} />
@@ -701,9 +706,9 @@ export default function AdminOrdersPage() {
         </div>
       ) : (
         <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
-          {filteredOrders.map((order) => (
-            <div 
-              key={order.id} 
+          {filteredOrders.map(order => (
+            <div
+              key={order.id}
               className={`bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-2xl transition-all ${
                 selectedOrders.has(order.id) ? 'ring-4 ring-pink-500' : ''
               }`}
@@ -724,7 +729,7 @@ export default function AdminOrdersPage() {
                         )}
                       </button>
                     )}
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <h3 className="font-bold text-sm text-gray-800">{order.orderRef}</h3>
@@ -740,7 +745,9 @@ export default function AdminOrdersPage() {
                         )}
                       </div>
                       <p className="text-sm text-gray-600">{order.userName}</p>
-                      <p className="text-xs text-gray-500">{order.items.length} items • {new Date(order.createdAt).toLocaleDateString('en-IN')}</p>
+                      <p className="text-xs text-gray-500">
+                        {order.items.length} items · {new Date(order.createdAt).toLocaleDateString('en-IN')}
+                      </p>
                     </div>
                   </div>
 
@@ -770,7 +777,13 @@ export default function AdminOrdersPage() {
                     <div key={idx} className="flex items-center gap-2 bg-gray-50 rounded-lg px-2 py-1 text-xs">
                       {item.cakeImage && (
                         <div className="relative w-6 h-6 rounded overflow-hidden">
-                          <Image src={item.cakeImage} alt={item.cakeName} fill className="object-cover" sizes="24px" />
+                          <Image
+                            src={item.cakeImage}
+                            alt={item.cakeName}
+                            fill
+                            className="object-cover"
+                            sizes="24px"
+                          />
                         </div>
                       )}
                       <span className="font-medium">{item.cakeName}</span>
@@ -797,18 +810,30 @@ export default function AdminOrdersPage() {
                         <div key={idx} className="bg-white rounded-lg p-3 flex gap-3">
                           {item.cakeImage && (
                             <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                              <Image src={item.cakeImage} alt={item.cakeName} fill className="object-cover" sizes="64px" />
+                              <Image
+                                src={item.cakeImage}
+                                alt={item.cakeName}
+                                fill
+                                className="object-cover"
+                                sizes="64px"
+                              />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm">{item.cakeName}</p>
                             <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
-                              {item.flavor && <span className="bg-gray-100 px-2 py-0.5 rounded">{item.flavor}</span>}
-                              {item.category && <span className="bg-pink-100 text-pink-700 px-2 py-0.5 rounded">{item.category}</span>}
+                              {item.flavor && (
+                                <span className="bg-gray-100 px-2 py-0.5 rounded">{item.flavor}</span>
+                              )}
+                              {item.category && (
+                                <span className="bg-pink-100 text-pink-700 px-2 py-0.5 rounded">{item.category}</span>
+                              )}
                               <span className="font-medium">{item.weight}</span>
                             </div>
                             {item.customization && (
-                              <p className="text-xs text-purple-700 bg-purple-50 px-2 py-1 rounded mt-1">{item.customization}</p>
+                              <p className="text-xs text-purple-700 bg-purple-50 px-2 py-1 rounded mt-1">
+                                {item.customization}
+                              </p>
                             )}
                           </div>
                           <div className="text-right">
@@ -828,13 +853,18 @@ export default function AdminOrdersPage() {
                         Customer Details
                       </h4>
                       <div className="space-y-2 text-sm bg-white rounded-lg p-3">
-                        <div className="flex items-start gap-2">
-                          <Phone className="text-gray-400 flex-shrink-0 mt-0.5" size={14} />
-                          <div>
-                            <p className="text-xs text-gray-500">Phone</p>
-                            <a href={`tel:${order.userPhone}`} className="font-semibold text-pink-600 hover:text-pink-700">{order.userPhone}</a>
+                        {/* ✅ FIXED: Added optional chaining */}
+                        {order.userPhone && (
+                          <div className="flex items-start gap-2">
+                            <Phone className="text-gray-400 flex-shrink-0 mt-0.5" size={14} />
+                            <div>
+                              <p className="text-xs text-gray-500">Phone</p>
+                              <a href={`tel:${order.userPhone}`} className="font-semibold text-pink-600 hover:text-pink-700">
+                                {order.userPhone}
+                              </a>
+                            </div>
                           </div>
-                        </div>
+                        )}
                         {order.userEmail && (
                           <div className="flex items-start gap-2">
                             <Mail className="text-gray-400 flex-shrink-0 mt-0.5" size={14} />
@@ -865,7 +895,13 @@ export default function AdminOrdersPage() {
                       <div className="space-y-2 text-sm bg-white rounded-lg p-3">
                         <div className="flex justify-between">
                           <span className="text-gray-600">Date</span>
-                          <span className="font-semibold">{new Date(order.deliveryDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          <span className="font-semibold">
+                            {new Date(order.deliveryDate).toLocaleDateString('en-IN', { 
+                              day: 'numeric', 
+                              month: 'short', 
+                              year: 'numeric' 
+                            })}
+                          </span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-600">Time</span>
@@ -908,7 +944,7 @@ export default function AdminOrdersPage() {
                         )}
                         {order.giftMessage && (
                           <div className="pt-2 border-t border-purple-200">
-                            <p className="text-xs text-gray-600 mb-1">Gift Message:</p>
+                            <p className="text-xs text-gray-600 mb-1">Gift Message</p>
                             <p className="italic text-gray-800">&quot;{order.giftMessage}&quot;</p>
                           </div>
                         )}
@@ -926,13 +962,13 @@ export default function AdminOrdersPage() {
                       <div className="bg-blue-50 rounded-lg p-3 space-y-2 text-sm border border-blue-200">
                         {order.specialInstructions && (
                           <div>
-                            <p className="text-xs text-gray-600 mb-1">Special Instructions:</p>
+                            <p className="text-xs text-gray-600 mb-1">Special Instructions</p>
                             <p className="text-gray-800">{order.specialInstructions}</p>
                           </div>
                         )}
                         {order.orderNote && (
                           <div className={order.specialInstructions ? 'pt-2 border-t border-blue-200' : ''}>
-                            <p className="text-xs text-gray-600 mb-1">Order Note:</p>
+                            <p className="text-xs text-gray-600 mb-1">Order Note</p>
                             <p className="text-gray-800">{order.orderNote}</p>
                           </div>
                         )}
@@ -1004,24 +1040,28 @@ export default function AdminOrdersPage() {
                     )}
                   </div>
 
-                  {/* Contact Actions */}
+                  {/* ✅ FIXED: Contact Actions with proper WhatsApp link */}
                   <div className="flex gap-2">
-                    <a
-                      href={`tel:${order.userPhone}`}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
-                    >
-                      <Phone size={18} />
-                      Call Customer
-                    </a>
-                    <a
-                      href={`https://wa.me/${order.userPhone.replace(/[^0-9]/g, '')}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
-                    >
-                      <MessageCircle size={18} />
-                      WhatsApp
-                    </a>
+                    {order.userPhone && (
+                      <>
+                        <a
+                          href={`tel:${order.userPhone}`}
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+                        >
+                          <Phone size={18} />
+                          Call Customer
+                        </a>
+                        <a
+                          href={`https://wa.me/${order.userPhone.replace(/[^0-9]/g, '')}?text=${generateWhatsAppMessage(order)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+                        >
+                          <MessageCircle size={18} />
+                          WhatsApp
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -1041,7 +1081,7 @@ export default function AdminOrdersPage() {
             transform: translateY(0);
           }
         }
-        
+
         @keyframes scale-up {
           from {
             opacity: 0;
@@ -1052,11 +1092,11 @@ export default function AdminOrdersPage() {
             transform: scale(1);
           }
         }
-        
+
         .animate-fade-in {
           animation: fade-in 0.6s ease-out;
         }
-        
+
         .animate-scale-up {
           animation: scale-up 0.3s ease-out;
         }
