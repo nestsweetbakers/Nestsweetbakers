@@ -31,76 +31,106 @@ interface OrderData {
   paymentMethod: string;
   specialInstructions?: string;
   orderNote?: string;
+  // NEW: currency support
+  currency?: 'INR' | 'CAD' | string;
+}
+
+/**
+ * Get currency symbol + code from order
+ */
+function getCurrency(orderData: OrderData) {
+  const code = orderData.currency || 'INR';
+  const symbol = code === 'CAD' ? '$' : '₹';
+  return { symbol, code };
 }
 
 /**
  * Format order message for WhatsApp
  */
 export function formatOrderWhatsAppMessage(orderData: OrderData) {
-  const itemsList = orderData.items.map((item: any, idx: number) => 
-    `${idx + 1}. *${item.cakeName}*\n` +
-    `   Weight: ${item.weight}\n` +
-    `   Price: ₹${item.totalPrice}` +
-    `${item.customization ? `\n   Note: ${item.customization}` : ''}`
-  ).join('\n\n');
+  const { symbol: currencySymbol, code: currencyCode } = getCurrency(orderData);
 
-  const message = `🎂 *NEW ORDER - NestSweets*\n\n` +
+  const itemsList = orderData.items
+    .map(
+      (item: any, idx: number) =>
+        `${idx + 1}. *${item.cakeName}*\n` +
+        `   Weight: ${item.weight}\n` +
+        `   Price: ${currencySymbol}${item.totalPrice}` +
+        `${item.customization ? `\n   Note: ${item.customization}` : ''}`,
+    )
+    .join('\n\n');
+
+  const message =
+    `*NEW ORDER - NestSweets*\n\n` +
     `*Order ID:* ${orderData.orderRef}\n` +
-    `*Order Date:* ${new Date().toLocaleDateString('en-IN', { 
-      weekday: 'long', 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
+    `*Order Date:* ${new Date().toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
     })}\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `*👤 CUSTOMER DETAILS*\n` +
+    `------------------------------\n` +
+    `*CUSTOMER DETAILS*\n` +
     `Name: ${orderData.customerInfo.name}\n` +
     `Phone: ${orderData.customerInfo.phone}\n` +
     `Email: ${orderData.customerInfo.email || 'N/A'}\n\n` +
-    `*📍 DELIVERY ADDRESS*\n` +
+    `*DELIVERY ADDRESS*\n` +
     `${orderData.customerInfo.address}\n` +
     `${orderData.customerInfo.city ? `City: ${orderData.customerInfo.city}\n` : ''}` +
     `Pincode: ${orderData.customerInfo.pincode}\n\n` +
-    `*📅 DELIVERY DETAILS*\n` +
-    `Date: ${new Date(orderData.deliveryDate).toLocaleDateString('en-IN', { 
-      weekday: 'long', 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
+    `*DELIVERY DETAILS*\n` +
+    `Date: ${new Date(orderData.deliveryDate).toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
     })}\n` +
     `Time: ${
-      orderData.deliveryTime === 'morning' ? '9 AM - 12 PM' : 
-      orderData.deliveryTime === 'afternoon' ? '12 PM - 4 PM' : 
-      '4 PM - 8 PM'
+      orderData.deliveryTime === 'morning'
+        ? '9 AM - 12 PM'
+        : orderData.deliveryTime === 'afternoon'
+        ? '12 PM - 4 PM'
+        : '4 PM - 8 PM'
     }\n\n` +
-    `${orderData.isGift ? 
-      `*🎁 GIFT ORDER*\n` +
-      `Recipient: ${orderData.recipientName}\n` +
-      `Occasion: ${orderData.occasionType}\n` +
-      `${orderData.giftMessage ? `Message: ${orderData.giftMessage}\n` : ''}\n`
-      : ''
+    `${
+      orderData.isGift
+        ? `*GIFT ORDER*\n` +
+          `Recipient: ${orderData.recipientName}\n` +
+          `Occasion: ${orderData.occasionType}\n` +
+          `${orderData.giftMessage ? `Message: ${orderData.giftMessage}\n` : ''}\n`
+        : ''
     }` +
-    `*🎂 ORDER ITEMS (${orderData.items.length})*\n${itemsList}\n\n` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `*💰 PRICE BREAKDOWN*\n` +
-    `Subtotal: ₹${orderData.subtotal.toFixed(2)}\n` +
-    `Delivery: ${orderData.deliveryFee === 0 ? 'FREE ✅' : '₹' + orderData.deliveryFee}\n` +
-    `Packaging: ₹${orderData.packagingFee}\n` +
-    `${orderData.tax > 0 ? `Tax: ₹${orderData.tax.toFixed(2)}\n` : ''}` +
-    `${orderData.discount > 0 ? `Discount (${orderData.promoCode}): -₹${orderData.discount.toFixed(2)}\n` : ''}` +
-    `*TOTAL: ₹${orderData.total.toFixed(2)}*\n\n` +
-    `*💳 PAYMENT METHOD:* ${orderData.paymentMethod.toUpperCase()}\n\n` +
-    `${orderData.specialInstructions ? 
-      `*📝 Special Instructions:*\n${orderData.specialInstructions}\n\n` 
-      : ''
+    `*ORDER ITEMS (${orderData.items.length})*\n${itemsList}\n\n` +
+    `------------------------------\n` +
+    `*PRICE BREAKDOWN* (${currencyCode})\n` +
+    `Subtotal: ${currencySymbol}${orderData.subtotal.toFixed(2)}\n` +
+    `Delivery: ${
+      orderData.deliveryFee === 0
+        ? `FREE`
+        : `${currencySymbol}${orderData.deliveryFee.toFixed(2)}`
+    }\n` +
+    `Packaging: ${currencySymbol}${orderData.packagingFee.toFixed(2)}\n` +
+    `${orderData.tax > 0 ? `Tax: ${currencySymbol}${orderData.tax.toFixed(2)}\n` : ''}` +
+    `${
+      orderData.discount > 0
+        ? `Discount${orderData.promoCode ? ` (${orderData.promoCode})` : ''}: -${currencySymbol}${orderData.discount.toFixed(2)}\n`
+        : ''
     }` +
-    `${orderData.orderNote ? 
-      `*📌 Order Note:*\n${orderData.orderNote}\n\n` 
-      : ''
+    `*TOTAL: ${currencySymbol}${orderData.total.toFixed(2)}*\n\n` +
+    `*PAYMENT METHOD:* ${orderData.paymentMethod.toUpperCase()}\n\n` +
+    `${
+      orderData.specialInstructions
+        ? `*Special Instructions:*\n${orderData.specialInstructions}\n\n`
+        : ''
     }` +
-    `━━━━━━━━━━━━━━━━━━━━\n` +
-    `🔗 *View Order:*\n${process.env.NEXT_PUBLIC_SITE_URL}/admin/orders/${orderData.orderId}\n\n` +
-    `_Automated notification from NestSweets_`;
+    `${
+      orderData.orderNote
+        ? `*Order Note:*\n${orderData.orderNote}\n\n`
+        : ''
+    }` +
+    `------------------------------\n` +
+    `View Order:\n${process.env.NEXT_PUBLIC_SITE_URL}/admin/orders/${orderData.orderId}\n\n` +
+    `Automated notification from NestSweets`;
 
   return message;
 }
@@ -110,38 +140,53 @@ export function formatOrderWhatsAppMessage(orderData: OrderData) {
  */
 export function getAdminWhatsAppUrl(orderData: OrderData): string {
   const message = formatOrderWhatsAppMessage(orderData);
-  const adminPhone = process.env.NEXT_PUBLIC_ADMIN_WHATSAPP || process.env.NEXT_PUBLIC_ADMIN_PHONE || '';
+  const adminPhone =
+    process.env.NEXT_PUBLIC_ADMIN_WHATSAPP ||
+    process.env.NEXT_PUBLIC_ADMIN_PHONE ||
+    '';
   const cleanPhone = adminPhone.replace(/[^0-9]/g, '');
-  
+
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
 }
 
 /**
  * Format customer confirmation message
  */
-export function formatCustomerConfirmationMessage(orderData: OrderData): string {
+export function formatCustomerConfirmationMessage(
+  orderData: OrderData,
+): string {
+  const { symbol: currencySymbol, code: currencyCode } = getCurrency(orderData);
+
   const itemsList = orderData.items
-    .map((item: any, idx: number) => `${idx + 1}. ${item.cakeName} (${item.weight}) - ₹${item.totalPrice}`)
+    .map(
+      (item: any, idx: number) =>
+        `${idx + 1}. ${item.cakeName} (${item.weight}) - ${currencySymbol}${item.totalPrice}`,
+    )
     .join('\n');
 
-  const message = `🍰 *Order Confirmation - NestSweets*\n\n` +
-    `Hi ${orderData.customerInfo.name}! 🎉\n\n` +
-    `Your order has been received successfully!\n\n` +
+  const message =
+    `Order Confirmation - NestSweets\n\n` +
+    `Hi ${orderData.customerInfo.name},\n\n` +
+    `Your order has been received successfully.\n\n` +
     `*Order ID:* ${orderData.orderRef}\n` +
-    `*Total Amount:* ₹${orderData.total.toFixed(2)}\n\n` +
+    `*Total Amount:* ${currencySymbol}${orderData.total.toFixed(
+      2,
+    )} (${currencyCode})\n\n` +
     `*Items:*\n${itemsList}\n\n` +
     `*Delivery Details:*\n` +
-    `📅 Date: ${new Date(orderData.deliveryDate).toLocaleDateString('en-IN')}\n` +
-    `⏰ Time: ${
-      orderData.deliveryTime === 'morning' ? '9 AM - 12 PM' : 
-      orderData.deliveryTime === 'afternoon' ? '12 PM - 4 PM' : 
-      '4 PM - 8 PM'
+    `Date: ${new Date(orderData.deliveryDate).toLocaleDateString('en-IN')}\n` +
+    `Time: ${
+      orderData.deliveryTime === 'morning'
+        ? '9 AM - 12 PM'
+        : orderData.deliveryTime === 'afternoon'
+        ? '12 PM - 4 PM'
+        : '4 PM - 8 PM'
     }\n` +
-    `📍 Address: ${orderData.customerInfo.address}\n\n` +
-    `We'll contact you shortly to confirm your order! 📱\n\n` +
+    `Address: ${orderData.customerInfo.address}\n\n` +
+    `You will be contacted shortly to confirm your order.\n\n` +
     `Track your order:\n${process.env.NEXT_PUBLIC_SITE_URL}/track-order?ref=${orderData.orderRef}\n\n` +
-    `For any queries, WhatsApp us:\n${process.env.NEXT_PUBLIC_SITE_URL}\n\n` +
-    `Thank you for choosing NestSweets! 💖`;
+    `For any queries, contact us:\n${process.env.NEXT_PUBLIC_SITE_URL}\n\n` +
+    `Thank you for choosing NestSweets.`;
 
   return message;
 }
@@ -152,7 +197,7 @@ export function formatCustomerConfirmationMessage(orderData: OrderData): string 
 export function getCustomerWhatsAppUrl(orderData: OrderData): string {
   const message = formatCustomerConfirmationMessage(orderData);
   const customerPhone = orderData.customerInfo.phone.replace(/[^0-9]/g, '');
-  
+
   return `https://wa.me/${customerPhone}?text=${encodeURIComponent(message)}`;
 }
 
@@ -162,21 +207,41 @@ export function getCustomerWhatsAppUrl(orderData: OrderData): string {
 export function formatStatusUpdateMessage(
   customerName: string,
   orderRef: string,
-  status: string
+  status: string,
 ): string {
   const statusMessages: Record<string, string> = {
-    confirmed: `✅ Great news ${customerName}!\n\nYour order *${orderRef}* has been confirmed! 🎉\n\nWe're preparing your delicious treats with love.\n\nYou'll receive updates as we progress.`,
-    preparing: `👨‍🍳 Hello ${customerName}!\n\nYour order *${orderRef}* is being prepared right now!\n\nOur bakers are working their magic to make your cake perfect. 🎂✨`,
-    ready: `🎂 Exciting news ${customerName}!\n\nYour order *${orderRef}* is ready!\n\nWe're preparing it for delivery. You'll receive it soon! 🚚`,
-    out_for_delivery: `🚗 On the way ${customerName}!\n\nYour order *${orderRef}* is out for delivery!\n\nExpect it within the scheduled time. Our delivery partner will contact you shortly. 📞`,
-    delivered: `🎉 Delivered successfully ${customerName}!\n\nYour order *${orderRef}* has been delivered!\n\nWe hope you enjoy your delicious treats! 🍰\n\nPlease share your feedback with us. Thank you for choosing NestSweets! 💖`,
-    cancelled: `❌ Order Cancelled\n\nHello ${customerName}, your order *${orderRef}* has been cancelled.\n\nIf you have any questions, please contact us.\n\nWe're sorry for any inconvenience.`
+    confirmed:
+      `Order Update\n\n` +
+      `Hello ${customerName}, your order *${orderRef}* has been confirmed.\n\n` +
+      `Your items are now queued for preparation.\n\n` +
+      `You will receive further updates as we progress.`,
+    preparing:
+      `Order Update\n\n` +
+      `Hello ${customerName}, your order *${orderRef}* is being prepared.\n\n` +
+      `Our team is working to have everything ready on time.`,
+    ready:
+      `Order Update\n\n` +
+      `Hello ${customerName}, your order *${orderRef}* is ready.\n\n` +
+      `We are preparing it for dispatch.`,
+    out_for_delivery:
+      `Order Update\n\n` +
+      `Hello ${customerName}, your order *${orderRef}* is out for delivery.\n\n` +
+      `You can expect it within the scheduled time. Our delivery partner may contact you if needed.`,
+    delivered:
+      `Order Update\n\n` +
+      `Hello ${customerName}, your order *${orderRef}* has been delivered.\n\n` +
+      `Hope you enjoyed your order. Your feedback is appreciated.`,
+    cancelled:
+      `Order Update\n\n` +
+      `Hello ${customerName}, your order *${orderRef}* has been cancelled.\n\n` +
+      `If you have any questions, please contact support.`,
   };
 
-  const message = statusMessages[status] || 
-    `📦 Order Update\n\nHello ${customerName}, your order *${orderRef}* status has been updated to: *${status.toUpperCase()}*`;
+  const message =
+    statusMessages[status] ||
+    `Order Update\n\nHello ${customerName}, your order *${orderRef}* status has been updated to: *${status.toUpperCase()}*`;
 
-  const trackingUrl = `\n\n🔗 Track your order:\n${process.env.NEXT_PUBLIC_SITE_URL}/track-order?ref=${orderRef}`;
+  const trackingUrl = `\n\nTrack your order:\n${process.env.NEXT_PUBLIC_SITE_URL}/track-order?ref=${orderRef}`;
 
   return message + trackingUrl;
 }
@@ -188,10 +253,10 @@ export function getStatusUpdateWhatsAppUrl(
   customerPhone: string,
   customerName: string,
   orderRef: string,
-  status: string
+  status: string,
 ): string {
   const message = formatStatusUpdateMessage(customerName, orderRef, status);
   const cleanPhone = customerPhone.replace(/[^0-9]/g, '');
-  
+
   return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
 }
