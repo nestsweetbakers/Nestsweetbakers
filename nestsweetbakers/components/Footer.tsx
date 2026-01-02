@@ -88,12 +88,27 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 mb-12">
           {/* About Section */}
           <div className="lg:col-span-4">
-            <Link href="/" className="flex items-center space-x-2 mb-4 group">
-              <span className="text-4xl group-hover:scale-110 transition-transform">🍰</span>
-              <span className="text-2xl font-bold text-pink-400 group-hover:text-pink-300 transition-colors">
-                {settings.businessName}
-              </span>
-            </Link>
+           <Link href="/" className="flex items-center space-x-2 mb-4 group">
+  {settings.logo ? (
+    <div className="w-10 h-10 rounded-full bg-white border border-pink-100 overflow-hidden">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={settings.logo}
+        alt={settings.businessName}
+        className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+      />
+    </div>
+  ) : (
+    <div className="w-10 h-10 rounded-full bg-white border border-pink-100 flex items-center justify-center">
+      <span className="text-2xl group-hover:scale-110 transition-transform">🍰</span>
+    </div>
+  )}
+
+  <span className="text-2xl font-bold text-pink-400 group-hover:text-pink-300 transition-colors">
+    {settings.businessName}
+  </span>
+</Link>
+
             <p className="text-gray-400 mb-6 leading-relaxed">
               {settings.tagline}
             </p>

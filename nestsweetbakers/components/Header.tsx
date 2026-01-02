@@ -54,6 +54,7 @@ const [hideAnnouncement, setHideAnnouncement] = useState(false);
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, [lastScrollY]);
+
 // Header announcement (real‑time)
 useEffect(() => {
   const q = query(
@@ -68,7 +69,7 @@ useEffect(() => {
     if (!snapshot.empty) {
       const docSnap = snapshot.docs[0];
       setAnnouncement({ id: docSnap.id, ...(docSnap.data() as any) });
-      setHideAnnouncement(false);
+      // do NOT reset hideAnnouncement here
     } else {
       setAnnouncement(null);
     }
@@ -76,6 +77,23 @@ useEffect(() => {
 
   return () => unsubscribe();
 }, []);
+
+// Respect previously closed announcement per ID
+useEffect(() => {
+  if (!announcement) return;
+
+  try {
+    const closedId = localStorage.getItem('closedAnnouncementId');
+    if (closedId === announcement.id) {
+      setHideAnnouncement(true);
+    } else {
+      setHideAnnouncement(false);
+    }
+  } catch {
+    // ignore storage errors
+  }
+}, [announcement]);
+
 
   // Fetch unread notifications
   useEffect(() => {
@@ -168,6 +186,9 @@ useEffect(() => {
   const businessName = settings.businessName || 'NestSweets';
   const logo = settings.logo;
 
+  const shouldScroll =
+  !!announcement?.message && announcement.message.length > 80;
+
   return (
     <>
       <header
@@ -180,37 +201,57 @@ useEffect(() => {
   }`}
 >
   {/* Announcement bar */}
-  {announcement && !hideAnnouncement && (
-    <div className="border-b border-pink-100 bg-gradient-to-r from-pink-600 to-purple-600 text-white">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 flex items-center gap-2 text-xs sm:text-sm">
-        <Megaphone size={16} className="flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold truncate">{announcement.title}</p>
-          {announcement.message && (
-            <p className="hidden sm:block text-[11px] opacity-90 truncate">
-              {announcement.message}
-            </p>
-          )}
-        </div>
-        {announcement.link && (
-          <Link
-            href={announcement.link}
-            className="px-2 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-full whitespace-nowrap"
-          >
-            View
-          </Link>
+{announcement && !hideAnnouncement && (
+  <div className="border-b border-pink-100 bg-gradient-to-r from-pink-600 to-purple-600 text-white">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-1.5 flex items-center gap-2 text-xs sm:text-sm">
+      <Megaphone size={16} className="flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold truncate">{announcement.title}</p>
+        {announcement.message && (
+          <div className="hidden sm:block text-[11px] opacity-90">
+            <div className={`min-w-0 ${shouldScroll ? 'overflow-hidden' : ''}`}>
+              <div
+                className={
+                  shouldScroll
+                    ? 'inline-block whitespace-nowrap animate-header-marquee'
+                    : 'truncate'
+                }
+              >
+                {announcement.message}
+              </div>
+            </div>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => setHideAnnouncement(true)}
-          className="ml-1 p-1 rounded-full hover:bg-white/20 transition-colors"
-          aria-label="Close announcement"
-        >
-          <X size={14} />
-        </button>
       </div>
+      {announcement.link && (
+        <Link
+          href={announcement.link}
+          className="px-2 py-1 text-xs font-semibold bg-white/15 hover:bg-white/25 rounded-full whitespace-nowrap"
+        >
+          View
+        </Link>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          setHideAnnouncement(true);
+          if (announcement?.id) {
+            try {
+              localStorage.setItem('closedAnnouncementId', announcement.id);
+            } catch {
+              // ignore storage errors
+            }
+          }
+        }}
+        className="ml-1 p-1 rounded-full hover:bg-white/20 transition-colors"
+        aria-label="Close announcement"
+      >
+        <X size={14} />
+      </button>
     </div>
-  )}
+  </div>
+)}
+
 
   <div className="max-w-7xl mx-auto px-3 sm:px-4">
   
@@ -219,20 +260,27 @@ useEffect(() => {
             {/* Logo */}
             <Link href="/" className="flex items-center space-x-1.5 group relative z-10">
               {logo ? (
-                <div className={`relative transition-all duration-500 ${scrolled ? 'w-8 h-8' : 'w-10 h-10'}`}>
+                <div  className={`relative transition-all duration-500 ${
+    scrolled ? 'w-8 h-8' : 'w-10 h-10'
+  } rounded-full bg-white border border-pink-100 overflow-hidden`}
+>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={logo}
-                    alt={businessName}
-                    className="w-full h-full object-contain group-hover:scale-110 transition-transform"
-                  />
+                <img
+    src={logo}
+    alt={businessName}
+    className="w-full h-full object-cover group-hover:scale-110 transition-transform rounded-full"
+  />
                 </div>
               ) : (
-                <div className={`transition-all duration-500 ${scrolled ? 'text-2xl' : 'text-3xl'}`}>
-                  <span className="inline-block group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
-                    🍰
-                  </span>
-                </div>
+              <div
+  className={`transition-all duration-500 ${
+    scrolled ? 'w-8 h-8 text-xl' : 'w-10 h-10 text-2xl'
+  } rounded-full bg-white border border-pink-100 flex items-center justify-center`}
+>
+                 <span className="inline-block group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
+    🍰
+  </span>
+</div>
               )}
               <div className="overflow-hidden">
                 <span className={`font-bold text-pink-600 group-hover:text-pink-700 transition-all duration-300 inline-block group-hover:translate-x-0.5 ${
@@ -579,10 +627,16 @@ useEffect(() => {
               <div className="flex items-center gap-2">
                 {logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logo} alt={businessName} className="w-10 h-10 object-contain" />
-                ) : (
-                  <span className="text-3xl">🍰</span>
-                )}
+                  <img
+    src={logo}
+    alt={businessName}
+    className="w-10 h-10 object-cover rounded-full bg-white border border-pink-100"
+  />
+) : (
+  <div className="w-10 h-10 rounded-full bg-white border border-pink-100 flex items-center justify-center">
+    <span className="text-2xl">🍰</span>
+  </div>
+)}
                 <span className="font-bold text-xl">{businessName}</span>
               </div>
               <button
@@ -802,6 +856,18 @@ useEffect(() => {
         .animate-bounce-slow {
           animation: bounce-slow 2s infinite;
         }
+          @keyframes header-marquee {
+    0% {
+      transform: translateX(100%);
+    }
+    100% {
+      transform: translateX(-100%);
+    }
+  }
+
+  .animate-header-marquee {
+    animation: header-marquee 15s linear infinite;
+  }
       `}</style>
     </>
   );

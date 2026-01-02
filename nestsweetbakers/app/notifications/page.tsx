@@ -29,6 +29,7 @@ interface Notification {
   actionUrl?: string;
   priority?: 'low' | 'medium' | 'high';
   metadata?: any;
+   link?: string;
 }
 
 
@@ -188,6 +189,33 @@ export default function NotificationsPage() {
   }
 
   if (!user) return null;
+  const getNotificationLink = (notif: Notification): string | null => {
+  // 1. Prefer explicit actionUrl
+  if (notif.actionUrl) return notif.actionUrl;
+
+  // 2. Support docs created by NotificationService (use `link`)
+  if (notif.link) return notif.link;
+
+  // 3. Derive from type + ids
+  if (notif.type === 'order' && notif.orderId) {
+    return `/orders/${notif.orderId}`;
+  }
+
+  if (notif.type === 'product' && notif.productId) {
+    return `/cakes/${notif.productId}`;
+  }
+
+  if (notif.type === 'custom_request' && notif.requestId) {
+    return `/custom-requests/${notif.requestId}`;
+  }
+
+  // Fallback: generic listing pages
+  if (notif.type === 'product') return '/cakes';
+  if (notif.type === 'order') return '/orders';
+
+  return null;
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 py-8 px-4">
@@ -325,24 +353,26 @@ export default function NotificationsPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredNotifications.map((notif, index) => (
-              <div
-                key={notif.id}
-                className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 animate-slide-up ${
-                  !notif.read ? 'border-l-4 border-l-pink-600' : 'border-white/50'
-                } ${getPriorityColor(notif.priority)}`}
-                style={{ animationDelay: `${index * 50}ms` }}
-                onClick={() => !notif.read && markAsRead(notif.id)}
-              >
-                <div className="p-5 sm:p-6">
-                  <div className="flex gap-4">
-                    {/* Icon */}
-                    <div className={`p-3 rounded-2xl flex-shrink-0 ${
-                      !notif.read ? 'bg-pink-100' : 'bg-gray-100'
-                    }`}>
-                      {getNotificationIcon(notif.type, notif.priority)}
-                    </div>
+           {filteredNotifications.map((notif, index) => {
+  const href = getNotificationLink(notif);
 
+  return (
+    <div
+      key={notif.id}
+      className={`bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all cursor-pointer border-2 animate-slide-up ${
+        !notif.read ? 'border-l-4 border-l-pink-600' : 'border-white/50'
+      } ${getPriorityColor(notif.priority)}`}
+      style={{ animationDelay: `${index * 50}ms` }}
+      onClick={() => !notif.read && markAsRead(notif.id)}
+    >
+      <div className="p-5 sm:p-6">
+        <div className="flex gap-4">
+          {/* Icon */}
+          <div className={`p-3 rounded-2xl flex-shrink-0 ${
+            !notif.read ? 'bg-pink-100' : 'bg-gray-100'
+          }`}>
+            {getNotificationIcon(notif.type, notif.priority)}
+          </div>
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-4 mb-2">
@@ -388,32 +418,38 @@ export default function NotificationsPage() {
                       )}
 
                       <div className="flex items-center justify-between flex-wrap gap-2">
-                        <span className="text-sm text-gray-500 flex items-center gap-2">
-                          <Clock size={14} />
-                          {notif.createdAt.toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </span>
+              <span className="text-sm text-gray-500 flex items-center gap-2">
+                <Clock size={14} />
+                {notif.createdAt.toLocaleDateString('en-IN', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
 
-                        {notif.actionUrl && (
-                          <Link
-                            href={notif.actionUrl}
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg hover:from-pink-700 hover:to-purple-700 transition font-semibold text-sm shadow-md"
-                          >
-                            <span>View Details</span>
-                            <TrendingUp size={14} />
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+              {href && (
+                <Link
+                  href={href}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!notif.read) {
+                      markAsRead(notif.id);
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg hover:from-pink-700 hover:to-purple-700 transition font-semibold text-sm shadow-md"
+                >
+                  <span>View Details</span>
+                  <TrendingUp size={14} />
+                </Link>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+})}
           </div>
         )}
       </div>

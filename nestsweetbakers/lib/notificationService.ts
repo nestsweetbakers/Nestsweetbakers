@@ -1,15 +1,15 @@
-import { 
-  collection, 
-  addDoc, 
-  serverTimestamp, 
-  query, 
-  where, 
-  getDocs, 
-  updateDoc, 
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+  updateDoc,
   doc,
   writeBatch,
   limit,
-  orderBy
+  orderBy,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -19,9 +19,10 @@ export interface Notification {
   title: string;
   message: string;
   type: 'order' | 'product' | 'system' | 'promo' | 'info';
-  isRead: boolean;
+  // Use `read` to be compatible with NotificationsPage + header unread counter
+  read: boolean;
   createdAt: any;
-  link?: string;
+  link?: string; // used by this service
   metadata?: any;
 }
 
@@ -41,7 +42,7 @@ class NotificationService {
         title,
         message,
         type,
-        isRead: false,
+        read: false,
         createdAt: serverTimestamp(),
         link,
         metadata,
@@ -61,8 +62,8 @@ class NotificationService {
   ): Promise<{ success: boolean; count: number }> {
     try {
       const usersSnapshot = await getDocs(collection(db, 'users'));
-      const userIds = usersSnapshot.docs.map(doc => doc.id);
-      
+      const userIds = usersSnapshot.docs.map((docSnap) => docSnap.id);
+
       // Firebase batch limit is 500 operations
       const BATCH_SIZE = 500;
       let totalNotifications = 0;
@@ -71,14 +72,14 @@ class NotificationService {
         const batch = writeBatch(db);
         const batchUserIds = userIds.slice(i, i + BATCH_SIZE);
 
-        batchUserIds.forEach(userId => {
+        batchUserIds.forEach((userId) => {
           const notifRef = doc(collection(db, 'notifications'));
           batch.set(notifRef, {
             userId,
             title,
             message,
             type,
-            isRead: false,
+            read: false,
             createdAt: serverTimestamp(),
             link,
           });
@@ -95,30 +96,30 @@ class NotificationService {
     }
   }
 
-  // Notify user about new product
+  // Notify all users about a single new product
   async notifyNewProduct(product: any): Promise<void> {
     try {
       const usersSnapshot = await getDocs(collection(db, 'users'));
-      
+
       // Use batch writes for efficiency
       const BATCH_SIZE = 500;
-      const userIds = usersSnapshot.docs.map(doc => doc.id);
+      const userIds = usersSnapshot.docs.map((docSnap) => docSnap.id);
 
       for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
         const batchUserIds = userIds.slice(i, i + BATCH_SIZE);
 
-        batchUserIds.forEach(userId => {
+        batchUserIds.forEach((userId) => {
           const notifRef = doc(collection(db, 'notifications'));
           batch.set(notifRef, {
             userId,
             title: '🎂 New Cake Available!',
             message: `Check out our new ${product.name} starting at ₹${product.basePrice}!`,
             type: 'product',
-            isRead: false,
+            read: false,
             createdAt: serverTimestamp(),
             link: `/cakes/${product.id}`,
-            metadata: { productId: product.id, productName: product.name }
+            metadata: { productId: product.id, productName: product.name },
           });
         });
 
@@ -134,17 +135,17 @@ class NotificationService {
   async notifyBulkProducts(count: number): Promise<void> {
     try {
       await this.sendBroadcastNotification(
-        '🎉 New Products Added!',
+        '🎉 New Cakes Added!',
         `${count} delicious new cake${count > 1 ? 's' : ''} just added to our collection. Explore them now!`,
         'product',
-        '/products'
+        '/cakes'
       );
     } catch (error) {
       console.error('Error notifying bulk products:', error);
     }
   }
 
-  // Notify user about order status change with auto stock update
+  // Notify user about order status change
   async notifyOrderStatusChange(params: {
     orderId: string;
     userId: string;
@@ -211,10 +212,10 @@ class NotificationService {
         message,
         'order',
         `/orders/${params.orderId}`,
-        { 
-          orderId: params.orderId, 
-          oldStatus: params.oldStatus, 
-          newStatus: params.newStatus 
+        {
+          orderId: params.orderId,
+          oldStatus: params.oldStatus,
+          newStatus: params.newStatus,
         }
       );
     } catch (error) {
@@ -235,7 +236,9 @@ class NotificationService {
       await this.sendNotification(
         params.userId,
         '🎉 Order Confirmed!',
-        `Your order for ${params.cakeName} has been confirmed. Total: ₹${params.totalPrice}. Delivery: ${new Date(params.deliveryDate).toLocaleDateString()}`,
+        `Your order for ${params.cakeName} has been confirmed. Total: ₹${params.totalPrice}. Delivery: ${new Date(
+          params.deliveryDate
+        ).toLocaleDateString()}`,
         'order',
         `/orders/${params.orderId}`,
         { orderId: params.orderId }
@@ -261,17 +264,17 @@ class NotificationService {
       const adminsSnapshot = await getDocs(adminsQuery);
 
       const batch = writeBatch(db);
-      adminsSnapshot.docs.forEach(adminDoc => {
+      adminsSnapshot.docs.forEach((adminDoc) => {
         const notifRef = doc(collection(db, 'notifications'));
         batch.set(notifRef, {
           userId: adminDoc.id,
           title: '🛒 New Order Received!',
           message: `${params.customerName} ordered ${params.cakeName} for ₹${params.totalPrice}`,
           type: 'order',
-          isRead: false,
+          read: false,
           createdAt: serverTimestamp(),
           link: `/admin/orders/${params.orderId}`,
-          metadata: { orderId: params.orderId }
+          metadata: { orderId: params.orderId },
         });
       });
 
@@ -295,17 +298,17 @@ class NotificationService {
       const adminsSnapshot = await getDocs(adminsQuery);
 
       const batch = writeBatch(db);
-      adminsSnapshot.docs.forEach(adminDoc => {
+      adminsSnapshot.docs.forEach((adminDoc) => {
         const notifRef = doc(collection(db, 'notifications'));
         batch.set(notifRef, {
           userId: adminDoc.id,
           title: '⚠️ Low Stock Alert',
           message: `${params.productName} is running low! Only ${params.currentStock} left in stock.`,
           type: 'system',
-          isRead: false,
+          read: false,
           createdAt: serverTimestamp(),
           link: `/admin/products`,
-          metadata: { productId: params.productId, stock: params.currentStock }
+          metadata: { productId: params.productId, stock: params.currentStock },
         });
       });
 
@@ -328,17 +331,17 @@ class NotificationService {
       const adminsSnapshot = await getDocs(adminsQuery);
 
       const batch = writeBatch(db);
-      adminsSnapshot.docs.forEach(adminDoc => {
+      adminsSnapshot.docs.forEach((adminDoc) => {
         const notifRef = doc(collection(db, 'notifications'));
         batch.set(notifRef, {
           userId: adminDoc.id,
           title: '❌ Out of Stock',
           message: `${params.productName} is now out of stock! Please restock immediately.`,
           type: 'system',
-          isRead: false,
+          read: false,
           createdAt: serverTimestamp(),
           link: `/admin/products`,
-          metadata: { productId: params.productId }
+          metadata: { productId: params.productId },
         });
       });
 
@@ -418,18 +421,18 @@ class NotificationService {
   }): Promise<void> {
     try {
       const batch = writeBatch(db);
-      
-      params.userIds.forEach(userId => {
+
+      params.userIds.forEach((userId) => {
         const notifRef = doc(collection(db, 'notifications'));
         batch.set(notifRef, {
           userId,
           title: params.title,
           message: params.message,
           type: 'promo',
-          isRead: false,
+          read: false,
           createdAt: serverTimestamp(),
-          link: params.link || '/products',
-          metadata: { promoCode: params.code }
+          link: params.link || '/cakes',
+          metadata: { promoCode: params.code },
         });
       });
 
@@ -441,7 +444,7 @@ class NotificationService {
 
   // Get user notifications with pagination
   async getUserNotifications(
-    userId: string, 
+    userId: string,
     limitCount = 20,
     unreadOnly = false
   ): Promise<Notification[]> {
@@ -457,17 +460,20 @@ class NotificationService {
         q = query(
           collection(db, 'notifications'),
           where('userId', '==', userId),
-          where('isRead', '==', false),
+          where('read', '==', false),
           orderBy('createdAt', 'desc'),
           limit(limitCount)
         );
       }
-      
+
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      } as Notification));
+      return snapshot.docs.map(
+        (docSnap) =>
+          ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          } as Notification)
+      );
     } catch (error) {
       console.error('Error getting user notifications:', error);
       return [];
@@ -478,7 +484,7 @@ class NotificationService {
   async markAsRead(notificationId: string): Promise<void> {
     try {
       await updateDoc(doc(db, 'notifications', notificationId), {
-        isRead: true,
+        read: true,
       });
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -492,14 +498,14 @@ class NotificationService {
       const q = query(
         collection(db, 'notifications'),
         where('userId', '==', userId),
-        where('isRead', '==', false)
+        where('read', '==', false)
       );
-      
+
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
 
-      snapshot.docs.forEach(docSnap => {
-        batch.update(doc(db, 'notifications', docSnap.id), { isRead: true });
+      snapshot.docs.forEach((docSnap) => {
+        batch.update(doc(db, 'notifications', docSnap.id), { read: true });
       });
 
       await batch.commit();
@@ -515,9 +521,9 @@ class NotificationService {
       const q = query(
         collection(db, 'notifications'),
         where('userId', '==', userId),
-        where('isRead', '==', false)
+        where('read', '==', false)
       );
-      
+
       const snapshot = await getDocs(q);
       return snapshot.size;
     } catch (error) {
@@ -526,11 +532,11 @@ class NotificationService {
     }
   }
 
-  // Delete notification
+  // "Delete" notification (soft delete by marking read)
   async deleteNotification(notificationId: string): Promise<void> {
     try {
       await updateDoc(doc(db, 'notifications', notificationId), {
-        isRead: true,
+        read: true,
       });
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -538,18 +544,18 @@ class NotificationService {
     }
   }
 
-  // Delete all notifications for a user
+  // Delete all notifications for a user (hard delete)
   async deleteAllUserNotifications(userId: string): Promise<void> {
     try {
       const q = query(
         collection(db, 'notifications'),
         where('userId', '==', userId)
       );
-      
+
       const snapshot = await getDocs(q);
       const batch = writeBatch(db);
 
-      snapshot.docs.forEach(docSnap => {
+      snapshot.docs.forEach((docSnap) => {
         batch.delete(doc(db, 'notifications', docSnap.id));
       });
 
@@ -562,3 +568,29 @@ class NotificationService {
 }
 
 export const notificationService = new NotificationService();
+
+// Helper: notify all users when a new product (cake) is added.
+// Uses `read` + `actionUrl` so it works perfectly with NotificationsPage.
+export async function notifyNewProduct(
+  productId: string,
+  productName: string,
+  productImage?: string
+) {
+  const usersSnapshot = await getDocs(collection(db, 'users'));
+
+  const promises = usersSnapshot.docs.map((userDoc) =>
+    addDoc(collection(db, 'notifications'), {
+      userId: userDoc.id,
+      type: 'product',
+      title: '🎉 New Cake Added!',
+      message: `Check out our new ${productName}! Fresh and delicious, available now.`,
+      productId,
+      imageUrl: productImage,
+      actionUrl: productId ? `/cakes/${productId}` : '/cakes',
+      read: false,
+      createdAt: serverTimestamp(),
+    })
+  );
+
+  await Promise.all(promises);
+}
