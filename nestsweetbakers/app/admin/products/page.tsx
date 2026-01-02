@@ -3,12 +3,15 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRef } from 'react';
 import { collection, getDocs, addDoc, updateDoc, doc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/context/ToastContext';
 import { notificationService } from '@/lib/notificationService';
 import { Cake } from '@/lib/types';
 import Papa from 'papaparse';
+import { useSettings } from '@/hooks/useSettings';
+
 import { 
   Plus, Edit, Trash2, Search, Package, DollarSign, Tag, X, TrendingUp, Images,
   Copy, Download, Grid3x3, List, CheckSquare, Square, Trash, Filter,
@@ -31,6 +34,7 @@ interface ExtendedCake extends Omit<Cake, 'discount' | 'stock'> {
   availableTo?: string;
   minOrder?: number;
   maxOrder?: number;
+   details?: string[]; 
 }
 
 
@@ -49,7 +53,15 @@ export default function AdminProducts() {
   const [bulkDeleteMode, setBulkDeleteMode] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [featuredFilter, setFeaturedFilter] = useState<'all' | 'featured' | 'regular'>('all');
-  // Add these state variables
+const { settings } = useSettings();
+const globalPincodes =
+  (settings?.allowedPincodes || '')
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean);
+
+const [pincodeInput, setPincodeInput] = useState('');
+
 const [importModal, setImportModal] = useState(false);
 const [importFile, setImportFile] = useState<File | null>(null);
 const [importing, setImporting] = useState(false);
@@ -66,44 +78,48 @@ const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'lowstock' | 
     isBulk?: boolean;
   }>({ show: false, id: '', name: '', isBulk: false });
   const { showSuccess, showError, showInfo } = useToast();
+const productRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  const [formData, setFormData] = useState<{
-    name: string;
-    description: string;
-    basePrice: number;
-    category: string;
-    imageUrl: string;
-    images: string[];
-    discount: number;
-    stock?: number;
-    featured: boolean;
-    tags: string[];
-    deliveryPincodes: string[];
-    currency: 'INR' | 'CAD';
-    seoKeywords: string[];
-    availableFrom: string;
-    availableTo: string;
-    minOrder: number;
-    maxOrder: number;
-  }>({
-    name: '',
-    description: '',
-    basePrice: 0,
-    category: '',
-    imageUrl: '',
-    images: [],
-    discount: 0,
-    stock: undefined,
-    featured: false,
-    tags: [],
-    deliveryPincodes: [],
-    currency: 'INR',
-    seoKeywords: [],
-    availableFrom: '',
-    availableTo: '',
-    minOrder: 0.5,
-    maxOrder: 10
-  });
+ const [formData, setFormData] = useState<{
+  name: string;
+  description: string;
+  basePrice: number;
+  category: string;
+  imageUrl: string;
+  images: string[];
+  discount: number;
+  stock?: number;
+  featured: boolean;
+  tags: string[];
+  deliveryPincodes: string[];
+  currency: 'INR' | 'CAD';
+  seoKeywords: string[];
+  availableFrom: string;
+  availableTo: string;
+  minOrder: number;
+  maxOrder: number;
+  details: string[]; // ✅ correct type
+}>({
+  name: '',
+  description: '',
+  basePrice: 0,
+  category: '',
+  imageUrl: '',
+  images: [],
+  discount: 0,
+  stock: undefined,
+  featured: false,
+  tags: [],
+  deliveryPincodes: [],
+  currency: 'INR',
+  seoKeywords: [],
+  availableFrom: '',
+  availableTo: '',
+  minOrder: 0.5,
+  maxOrder: 10,
+  details: [] // ✅ no need for “as string[]”
+});
+
 
   // Calculate discounted price
   const calculateDiscountedPrice = (price: number, discount: number) => {
@@ -235,6 +251,7 @@ const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'lowstock' | 
       availableFrom: formData.availableFrom || '',
       availableTo: formData.availableTo || '',
       minOrder: formData.minOrder || 0.5,
+       details: formData.details || [],
       maxOrder: formData.maxOrder || 10
     };
 
@@ -356,9 +373,9 @@ const [stockFilter, setStockFilter] = useState<'all' | 'instock' | 'lowstock' | 
   }
   // Add CSV Template Download Function
 function downloadTemplate() {
-  const template = `Name,Description,Category,Base Price,Currency,Discount,Stock,Featured,Tags,Delivery Pincodes,SEO Keywords,Min Order,Max Order,Image URL
-Chocolate Truffle Cake,Rich and creamy chocolate cake,Birthday,599,INR,10,50,true,"Chocolate,Premium,Birthday","110001,110002","best chocolate cake,truffle cake online",0.5,10,https://images.unsplash.com/photo-1578985545062-69928b1d9587
-Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false,"Vanilla,Classic","110001,110002,110003","vanilla cake,sponge cake",0.5,5,https://images.unsplash.com/photo-1464349095431-e9a21285b5f3`;
+   const template = `Name,Description,Category,Base Price,Currency,Discount,Stock,Featured,Tags,Delivery Pincodes,SEO Keywords,Min Order,Max Order,Image URL,Images,Details
+Chocolate Truffle Cake,Rich and creamy chocolate cake,Birthday,599,INR,10,50,true,"Chocolate,Premium,Birthday","110001,110002","best chocolate cake,truffle cake online",0.5,10,https://images.unsplash.com/photo-1578985545062-69928b1d9587,"https://.../img1;https://.../img2","100% eggless;Freshly baked;Premium ingredients"
+Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false,"Vanilla,Classic","110001,110002,110003","vanilla cake,sponge cake",0.5,5,https://images.unsplash.com/photo-1464349095431-e9a21285b5f3,"","Soft sponge;Perfect for birthdays"`;
 
   const blob = new Blob([template], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -408,14 +425,23 @@ async function handleImportCSV() {
             category: row.Category.trim(),
             basePrice: parseFloat(row['Base Price']) || 0,
             currency: (row.Currency || 'INR').toUpperCase() as 'INR' | 'CAD',
-            imageUrl: row['Image URL'].trim(),
-            images: [],
+             imageUrl: row['Image URL'].trim(),
+  images: row.Images
+    ? row.Images.split(/[;,\|]/).map((u: string) => u.trim()).filter(Boolean)
+    : [],
             discount: parseInt(row.Discount) || 0,
             stock: row.Stock ? parseInt(row.Stock) : undefined,
             featured: row.Featured?.toLowerCase() === 'true',
             tags: row.Tags ? row.Tags.split(',').map((t: string) => t.trim()) : [],
-            deliveryPincodes: row['Delivery Pincodes'] ? row['Delivery Pincodes'].split(',').map((p: string) => p.trim()) : [],
-            seoKeywords: row['SEO Keywords'] ? row['SEO Keywords'].split(',').map((k: string) => k.trim()) : [],
+           deliveryPincodes: row['Delivery Pincodes']
+    ? row['Delivery Pincodes'].split(',').map((p: string) => p.trim())
+    : [],
+     details: row.Details
+    ? row.Details.split(/[;,\|]/).map((d: string) => d.trim()).filter(Boolean)
+    : [],
+           seoKeywords: row['SEO Keywords']
+    ? row['SEO Keywords'].split(',').map((k: string) => k.trim())
+    : [],
             minOrder: parseFloat(row['Min Order']) || 0.5,
             maxOrder: parseFloat(row['Max Order']) || 10,
             orderCount: 0,
@@ -539,17 +565,18 @@ async function handleImportJSON() {
       const productData = {
         name: item.name,
         description: item.description,
+        details: Array.isArray(item.details) ? item.details : [],  
         category: item.category,
         basePrice: parseFloat(item.basePrice) || 0,
         currency: (item.currency || 'INR').toUpperCase() as 'INR' | 'CAD',
-        imageUrl: item.imageUrl,
-        images: Array.isArray(item.images) ? item.images : [],
+         imageUrl: item.imageUrl,
+  images: Array.isArray(item.images) ? item.images : [],
         discount: parseInt(item.discount) || 0,
         stock: item.stock !== undefined ? parseInt(item.stock) : undefined,
         featured: item.featured === true || item.featured === 'true',
         tags: Array.isArray(item.tags) ? item.tags : [],
-        deliveryPincodes: Array.isArray(item.deliveryPincodes) ? item.deliveryPincodes : [],
-        seoKeywords: Array.isArray(item.seoKeywords) ? item.seoKeywords : [],
+          deliveryPincodes: Array.isArray(item.deliveryPincodes) ? item.deliveryPincodes : [],
+       seoKeywords: Array.isArray(item.seoKeywords) ? item.seoKeywords : [],
         minOrder: parseFloat(item.minOrder) || 0.5,
         maxOrder: parseFloat(item.maxOrder) || 10,
         orderCount: 0,
@@ -626,14 +653,23 @@ async function handleImportExcel() {
         category: row.Category.toString().trim(),
         basePrice: parseFloat(row['Base Price']) || 0,
         currency: (row.Currency || 'INR').toString().toUpperCase() as 'INR' | 'CAD',
-        imageUrl: row['Image URL'].toString().trim(),
-        images: [],
+        imageUrl: row['Image URL'].trim(),
+  images: row.Images
+    ? row.Images.split(/[;,\|]/).map((u: string) => u.trim()).filter(Boolean)
+    : [],
         discount: parseInt(row.Discount) || 0,
         stock: row.Stock ? parseInt(row.Stock) : undefined,
         featured: row.Featured?.toString().toLowerCase() === 'true',
         tags: row.Tags ? row.Tags.toString().split(',').map((t: string) => t.trim()) : [],
-        deliveryPincodes: row['Delivery Pincodes'] ? row['Delivery Pincodes'].toString().split(',').map((p: string) => p.trim()) : [],
-        seoKeywords: row['SEO Keywords'] ? row['SEO Keywords'].toString().split(',').map((k: string) => k.trim()) : [],
+        deliveryPincodes: row['Delivery Pincodes']
+    ? row['Delivery Pincodes'].split(',').map((p: string) => p.trim())
+    : [],
+        seoKeywords: row['SEO Keywords']
+    ? row['SEO Keywords'].split(',').map((k: string) => k.trim())
+    : [],
+     details: row.Details
+    ? row.Details.split(/[;,\|]/).map((d: string) => d.trim()).filter(Boolean)
+    : [],
         minOrder: parseFloat(row['Min Order']) || 0.5,
         maxOrder: parseFloat(row['Max Order']) || 10,
         orderCount: 0,
@@ -688,7 +724,16 @@ function downloadJSONTemplate() {
       seoKeywords: ["best chocolate cake", "truffle cake online"],
       minOrder: 0.5,
       maxOrder: 10,
-      imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587"
+      imageUrl: "https://images.unsplash.com/photo-1578985545062-69928b1d9587",
+      images: [
+        "https://.../img1",
+        "https://.../img2"
+      ],
+      details: [
+        "100% eggless",
+        "Freshly baked to order",
+        "Premium ingredients"
+      ]
     },
     {
       name: "Vanilla Sponge Cake",
@@ -721,9 +766,9 @@ function downloadJSONTemplate() {
 
 // Download Excel Template
 function downloadExcelTemplate() {
-  const template = `Name,Description,Category,Base Price,Currency,Discount,Stock,Featured,Tags,Delivery Pincodes,SEO Keywords,Min Order,Max Order,Image URL
-Chocolate Truffle Cake,Rich and creamy chocolate cake,Birthday,599,INR,10,50,true,"Chocolate,Premium,Birthday","110001,110002","best chocolate cake,truffle cake online",0.5,10,https://images.unsplash.com/photo-1578985545062-69928b1d9587
-Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false,"Vanilla,Classic","110001,110002,110003","vanilla cake,sponge cake",0.5,5,https://images.unsplash.com/photo-1464349095431-e9a21285b5f3`;
+  const template = `Name,Description,Category,Base Price,Currency,Discount,Stock,Featured,Tags,Delivery Pincodes,SEO Keywords,Min Order,Max Order,Image URL,Images,Details
+Chocolate Truffle Cake,Rich and creamy chocolate cake,Birthday,599,INR,10,50,true,"Chocolate,Premium,Birthday","110001,110002","best chocolate cake,truffle cake online",0.5,10,https://images.unsplash.com/photo-1578985545062-69928b1d9587,"https://.../img1;https://.../img2","100% eggless;Freshly baked;Premium ingredients"
+Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false,"Vanilla,Classic","110001,110002,110003","vanilla cake,sponge cake",0.5,5,https://images.unsplash.com/photo-1464349095431-e9a21285b5f3,"","Soft sponge;Perfect for birthdays"`;
 
   const blob = new Blob([template], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
@@ -783,6 +828,7 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
       availableFrom: '',
       availableTo: '',
       minOrder: 0.5,
+       details: [],
       maxOrder: 10
     });
     setEditingProduct(null);
@@ -807,6 +853,7 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
       seoKeywords: product.seoKeywords || [],
       availableFrom: product.availableFrom || '',
       availableTo: product.availableTo || '',
+      details: product.details || [],
       minOrder: product.minOrder || 0.5,
       maxOrder: product.maxOrder || 10
     });
@@ -850,19 +897,27 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
   const suggestedTags = ['Chocolate', 'Vanilla', 'Strawberry', 'Butterscotch', 'Red Velvet', 'Black Forest', 'Premium', 'Budget', 'Kids Special'];
   
   const stats = {
-    total: products.length,
-    featured: products.filter(p => p.featured).length,
-    inStock: products.filter(p => (p.stock || 0) > 10).length,
-    lowStock: products.filter(p => {
-      const stock = p.stock || 0;
-      return stock > 0 && stock <= 10;
-    }).length,
-    outOfStock: products.filter(p => p.stock === 0).length,
-    totalValue: products.reduce((sum, p) => sum + (p.basePrice || 0) * (p.stock || 0), 0),
-    avgDiscount: products.length > 0 
-      ? products.reduce((sum, p) => sum + (p.discount || 0), 0) / products.length 
-      : 0
-  };
+  total: products.length,
+  featured: products.filter(p => p.featured).length,
+  inStock: products.filter(p => (p.stock || 0) > 10).length,
+  lowStock: products.filter(p => {
+    const stock = p.stock || 0;
+    return stock > 0 && stock <= 10;
+  }).length,
+  outOfStock: products.filter(p => p.stock === 0).length,
+  totalValueINR: products.reduce((sum, p) => {
+    const value = (p.basePrice || 0) * (p.stock || 0);
+    return (p.currency || 'INR') === 'INR' ? sum + value : sum;
+  }, 0),
+  totalValueCAD: products.reduce((sum, p) => {
+    const value = (p.basePrice || 0) * (p.stock || 0);
+    return p.currency === 'CAD' ? sum + value : sum;
+  }, 0),
+  avgDiscount: products.length > 0
+    ? products.reduce((sum, p) => sum + (p.discount || 0), 0) / products.length
+    : 0,
+};
+
 
   if (loading) {
     return (
@@ -876,7 +931,51 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
         </div>
       </div>
     );
-  }
+  }const defaultDetailSets: string[][] = [
+  [
+    '100% eggless',
+    'Freshly baked to order',
+    'Premium quality ingredients',
+    'Perfect for birthdays & celebrations',
+  ],
+  [
+    'Same-day / next-day delivery (as per availability)',
+    'Customizable design and message on cake',
+    'Handled with temperature-controlled delivery',
+    'Ideal for gifting your loved ones',
+  ],
+  [
+    'Soft, moist sponge with rich cream layers',
+    'Prepared in FSSAI-approved kitchen',
+    'Packed in secure, tamper-proof boxes',
+    'Best consumed within 24 hours of delivery',
+  ],
+];
+const addPincodesFromString = (value: string) => {
+  const parts = value
+    .split(/[,\s]+/)
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  if (!parts.length) return;
+
+  const current = new Set(formData.deliveryPincodes || []);
+  parts.forEach(p => current.add(p));
+
+  setFormData({
+    ...formData,
+    deliveryPincodes: Array.from(current),
+  });
+  setPincodeInput('');
+};
+
+const removePincode = (pin: string) => {
+  setFormData({
+    ...formData,
+    deliveryPincodes: (formData.deliveryPincodes || []).filter(p => p !== pin),
+  });
+};
+
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -1234,10 +1333,20 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
           <p className="text-xs font-semibold text-red-700 mb-1">Out of Stock</p>
           <p className="text-2xl font-bold text-red-600">{stats.outOfStock}</p>
         </div>
-        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border-2 border-purple-200">
-          <p className="text-xs font-semibold text-purple-700 mb-1">Inventory Value</p>
-          <p className="text-xl font-bold text-purple-600">₹{stats.totalValue.toFixed(0)}</p>
-        </div>
+       <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border-2 border-purple-200">
+  <p className="text-xs font-semibold text-purple-700 mb-1">Inventory Value</p>
+  <div className="text-sm font-semibold text-purple-700 space-y-0.5">
+    <p className="text-xl font-bold text-purple-600">
+      ₹{Math.round(stats.totalValueINR).toLocaleString('en-IN')}
+      <span className="ml-1 text-xs font-normal text-purple-700">INR</span>
+    </p>
+    <p className="text-base font-bold text-purple-600">
+      CA${Math.round(stats.totalValueCAD).toLocaleString('en-CA')}
+      <span className="ml-1 text-xs font-normal text-purple-700">CAD</span>
+    </p>
+  </div>
+</div>
+
         <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-xl p-4 border-2 border-pink-200">
           <p className="text-xs font-semibold text-pink-700 mb-1">Avg Discount</p>
           <p className="text-2xl font-bold text-pink-600">{stats.avgDiscount.toFixed(1)}%</p>
@@ -1247,19 +1356,20 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
       {/* Add/Edit Form */}
       {showForm && (
         <div className="bg-white rounded-2xl shadow-2xl p-6 animate-scale-up border-2 border-pink-200">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
-            {editingProduct ? (
-              <>
-                <Edit size={24} className="text-pink-600" />
-                Edit Product: {editingProduct.name}
-              </>
-            ) : (
-              <>
-                <Plus size={24} className="text-pink-600" />
-                Add New Product
-              </>
-            )}
-          </h2>
+         <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+  {editingProduct ? (
+    <>
+      <Edit size={24} className="text-pink-600" />
+      Edit Product: {editingProduct.name}
+    </>
+  ) : (
+    <>
+      <Plus size={24} className="text-pink-600" />
+      Add New Product
+    </>
+  )}
+</h2>
+
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Image Upload */}
             <ImageUpload
@@ -1331,6 +1441,48 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
                 </div>
               </div>
             </div>
+{/* Product Details / Highlights */}
+<div className="p-4 bg-emerald-50 rounded-xl border-2 border-emerald-200">
+  <h3 className="font-bold text-lg text-emerald-900 mb-4 flex items-center gap-2">
+    <Sparkles size={20} />
+    Product Details / Highlights
+  </h3>
+
+  <p className="text-xs text-gray-600 mb-2">
+    These points will be shown on the cake details page. One point per line.
+  </p>
+
+  <textarea
+    placeholder={'e.g.\n• 100% eggless\n• Freshly baked on order\n• Premium ingredients only'}
+    value={(formData.details || []).join('\n')}
+    onChange={e =>
+      setFormData({
+        ...formData,
+        details: e.target.value
+          .split('\n')
+          .map(l => l.replace(/^[-•]\s*/, '').trim())
+          .filter(Boolean),
+      })
+    }
+    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all font-mono text-sm"
+    rows={4}
+  />
+
+  <div className="flex flex-wrap gap-2 mt-3">
+    <button
+      type="button"
+      onClick={() => {
+        const random =
+          defaultDetailSets[Math.floor(Math.random() * defaultDetailSets.length)];
+        setFormData({ ...formData, details: random });
+      }}
+      className="px-3 py-1.5 bg-emerald-600 text-white rounded-full text-xs font-semibold hover:bg-emerald-700 transition flex items-center gap-1"
+    >
+      <Zap size={14} />
+      Use Random Default Details
+    </button>
+  </div>
+</div>
 
             {/* Pricing & Discount */}
             <div className="p-4 bg-green-50 rounded-xl border-2 border-green-200">
@@ -1517,28 +1669,115 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
               </div>
             </div>
 
-            {/* Delivery Pincodes */}
-            <div className="p-4 bg-cyan-50 rounded-xl border-2 border-cyan-200">
-              <h3 className="font-bold text-lg text-cyan-900 mb-4 flex items-center gap-2">
-                <MapPin size={20} />
-                Delivery Areas
-              </h3>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Delivery Pincodes (comma separated) - Leave empty for all areas
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g., 110001, 110002, 110003"
-                  value={(formData.deliveryPincodes || []).join(', ')}
-                  onChange={e => setFormData({...formData, deliveryPincodes: e.target.value.split(',').map(p => p.trim()).filter(Boolean)})}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  💡 Tip: Add specific pincodes where this product can be delivered. Leave empty to deliver everywhere.
-                </p>
-              </div>
-            </div>
+           {/* Delivery Pincodes */}
+<div className="p-4 bg-cyan-50 rounded-xl border-2 border-cyan-200">
+  <h3 className="font-bold text-lg text-cyan-900 mb-4 flex items-center gap-2">
+    <MapPin size={20} />
+    Delivery Areas
+  </h3>
+
+  {/* Selected pincodes */}
+  <div className="mb-3">
+    <label className="block text-sm font-semibold text-gray-700 mb-2">
+      Selected Pincodes (leave empty to allow all areas)
+    </label>
+    {formData.deliveryPincodes?.length ? (
+      <div className="flex flex-wrap gap-2">
+        {formData.deliveryPincodes.map(pin => (
+          <span
+            key={pin}
+            className="inline-flex items-center gap-1 px-3 py-1 bg-cyan-100 text-cyan-800 rounded-full text-xs font-semibold border border-cyan-200"
+          >
+            {pin}
+            <button
+              type="button"
+              onClick={() => removePincode(pin)}
+              className="ml-1 text-cyan-700 hover:text-cyan-900"
+            >
+              <X size={12} />
+            </button>
+          </span>
+        ))}
+      </div>
+    ) : (
+      <p className="text-xs text-gray-500">
+        No specific pincodes selected. This product will follow global allowed pincodes.
+      </p>
+    )}
+  </div>
+
+  {/* Global/default pincodes from settings */}
+  {!!globalPincodes.length && (
+    <div className="mb-3">
+      <p className="text-xs font-semibold text-gray-700 mb-1">
+        Global Pincodes from Settings
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {globalPincodes.map(pin => {
+          const active = formData.deliveryPincodes?.includes(pin);
+          return (
+            <button
+              key={pin}
+              type="button"
+              onClick={() =>
+                active
+                  ? removePincode(pin)
+                  : addPincodesFromString(pin)
+              }
+              className={`px-3 py-1 rounded-full text-xs font-semibold border transition ${
+                active
+                  ? 'bg-cyan-600 text-white border-cyan-700'
+                  : 'bg-white text-cyan-700 border-cyan-300 hover:bg-cyan-50'
+              }`}
+            >
+              {active ? '✓ ' : ''}{pin}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={() => addPincodesFromString(globalPincodes.join(','))}
+        className="mt-2 text-xs text-cyan-700 underline"
+      >
+        Use all global pincodes
+      </button>
+    </div>
+  )}
+
+  {/* Add new pincodes */}
+  <div>
+    <label className="block text-sm font-semibold text-gray-700 mb-2">
+      Add New Pincodes
+    </label>
+    <div className="flex gap-2">
+      <input
+        type="text"
+        placeholder="e.g., 133001, 133002"
+        value={pincodeInput}
+        onChange={e => setPincodeInput(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            addPincodesFromString(pincodeInput);
+          }
+        }}
+        className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+      />
+      <button
+        type="button"
+        onClick={() => addPincodesFromString(pincodeInput)}
+        className="px-4 py-3 bg-cyan-600 text-white rounded-xl font-semibold hover:bg-cyan-700 transition-all"
+      >
+        Add
+      </button>
+    </div>
+    <p className="text-xs text-gray-500 mt-2">
+      Tip: You can paste multiple pincodes separated by comma or space and press Enter.
+    </p>
+  </div>
+</div>
+
 
             {/* Availability Schedule */}
             <div className="p-4 bg-teal-50 rounded-xl border-2 border-teal-200">
@@ -1818,23 +2057,29 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filteredProducts.map((product, index) => {
-                  const finalPrice = calculateDiscountedPrice(product.basePrice || 0, product.discount || 0);
-                  const stockStatus = product.stock === undefined ? 'unlimited' : 
+  const finalPrice = calculateDiscountedPrice(product.basePrice || 0, product.discount || 0);
+  const stockStatus = product.stock === undefined ? 'unlimited' : 
                                      product.stock === 0 ? 'out' : 
                                      product.stock <= 10 ? 'low' : 'in';
                   
                   return (
-                    <tr key={product.id} className="hover:bg-gray-50 transition">
+                    <tr
+    key={product.id}
+    ref={el => {
+      if (product.id) productRefs.current[product.id] = el as HTMLTableRowElement;
+    }}
+    className="hover:bg-gray-50 transition"
+  >
                       {bulkDeleteMode && (
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={selectedProducts.has(product.id!)}
-                            onChange={() => toggleSelectProduct(product.id!)}
-                            className="w-5 h-5"
-                          />
-                        </td>
-                      )}
+        <td className="px-4 py-3">
+          <input
+            type="checkbox"
+            checked={selectedProducts.has(product.id!)}
+            onChange={() => toggleSelectProduct(product.id!)}
+            className="w-5 h-5"
+          />
+        </td>
+      )}
                       <td className="px-4 py-3">
                         <div className="relative w-16 h-16 rounded-lg overflow-hidden">
                           <Image
@@ -1952,16 +2197,18 @@ Vanilla Sponge Cake,Light and fluffy vanilla delight,Birthday,499,INR,5,30,false
             const stockStatus = product.stock === undefined ? 'unlimited' : 
                                product.stock === 0 ? 'out' : 
                                product.stock <= 10 ? 'low' : 'in';
-
-            return (
-              <div 
-                key={product.id} 
-                className={`bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all ${
-                  viewMode === 'grid' ? 'transform hover:-translate-y-1' : ''
-                } ${
-                  selectedProducts.has(product.id!) ? 'ring-4 ring-pink-500' : ''
-                }`}
-              >
+ return (  
+  <div
+    key={product.id}
+    ref={el => {
+      if (product.id) productRefs.current[product.id] = el;
+    }}
+    className={`bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all ${
+      viewMode === 'grid' ? 'transform hover:-translate-y-1' : ''
+    } ${
+      selectedProducts.has(product.id!) ? 'ring-4 ring-pink-500' : ''
+    }`}
+  >
                 {viewMode === 'grid' ? (
                   // Grid View Card
                   <>

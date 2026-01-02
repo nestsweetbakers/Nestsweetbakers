@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 const CATEGORIES = ['All', 'Birthday', 'Wedding', 'Anniversary', 'Custom', 'Special', 'Eggless', 'Vegan'];
 const PRICE_RANGES = [
@@ -37,6 +38,7 @@ interface ExtendedCake extends Omit<Cake, 'discount' | 'stock'> {
   stock?: number;
   featured?: boolean;
   tags?: string[];
+  orderCount?: number;
 }
 
 export default function CakesPage() {
@@ -52,11 +54,19 @@ export default function CakesPage() {
   const [showMobileSort, setShowMobileSort] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
 
-  // Get dynamic settings
   const { settings, loading: settingsLoading } = useSettings();
+  const searchParams = useSearchParams();
 
-  // Get currency symbol based on settings
-  const currencySymbol = settings.currency === 'CAD' ? '$' : '₹';
+  // Get currency symbol based on settings (safe access)
+  const currencySymbol = settings?.currency === 'CAD' ? '$' : '₹';
+
+  // Initialize search from URL: /cakes?search=vanila
+  useEffect(() => {
+    const initialSearch = searchParams.get('search');
+    if (initialSearch && !searchQuery) {
+      setSearchQuery(initialSearch);
+    }
+  }, [searchParams, searchQuery]);
 
   useEffect(() => {
     async function fetchCakes() {
@@ -64,7 +74,7 @@ export default function CakesPage() {
         const querySnapshot = await getDocs(collection(db, 'products'));
         const cakesData = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data()
+          ...doc.data(),
         } as ExtendedCake));
         
         setCakes(cakesData);
@@ -87,6 +97,7 @@ export default function CakesPage() {
       result = result.filter(cake => cake.category === selectedCategory);
     }
 
+    // Price range filter (uses discounted price if discount exists)
     result = result.filter(cake => {
       const price = cake.discount && cake.discount > 0 
         ? cake.basePrice * (1 - cake.discount / 100)
@@ -94,6 +105,7 @@ export default function CakesPage() {
       return price >= priceRange.min && price <= priceRange.max;
     });
 
+    // Text search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(cake =>
@@ -104,6 +116,7 @@ export default function CakesPage() {
       );
     }
 
+    // Sorting
     switch (sortBy) {
       case 'popularity':
         result.sort((a, b) => (b.orderCount || 0) - (a.orderCount || 0));
@@ -167,11 +180,29 @@ export default function CakesPage() {
     setSortBy('popularity');
   };
 
+  const hasActiveFilters = 
+    selectedCategory !== 'All' ||
+    priceRange !== PRICE_RANGES[0] ||
+    searchQuery.trim() !== '';
+
   const activeFiltersCount = [
     selectedCategory !== 'All',
     priceRange !== PRICE_RANGES[0],
     searchQuery.trim() !== ''
   ].filter(Boolean).length;
+
+  // Main list: when filters/search are active, show filtered cakes first,
+  // then extra featured cakes (not already in filtered list)
+  const mainCakes = useMemo(() => {
+    if (!hasActiveFilters) {
+      return filteredCakes;
+    }
+    const filteredIds = new Set(filteredCakes.map(c => c.id));
+    const extraFeatured = cakes.filter(
+      c => c.featured && !filteredIds.has(c.id)
+    );
+    return [...filteredCakes, ...extraFeatured];
+  }, [hasActiveFilters, filteredCakes, cakes]);
 
   if (loading || settingsLoading) {
     return (
@@ -181,7 +212,9 @@ export default function CakesPage() {
             <div className="absolute inset-0 border-4 border-pink-200 rounded-full animate-ping"></div>
             <div className="relative w-24 h-24 border-4 border-pink-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
-          <p className="text-gray-600 font-semibold text-lg animate-pulse">Loading delicious cakes...</p>
+          <p className="text-gray-600 font-semibold text-lg animate-pulse">
+            Loading delicious cakes...
+          </p>
         </div>
       </div>
     );
@@ -192,46 +225,80 @@ export default function CakesPage() {
       <div className="container mx-auto px-4 max-w-7xl">
         {/* Contact Modal */}
         {showContactModal && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowContactModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-in" onClick={e => e.stopPropagation()}>
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-fade-in"
+            onClick={() => setShowContactModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-in"
+              onClick={e => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-800">Contact Us</h3>
-                <button onClick={() => setShowContactModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition">
+                <h3 className="text-2xl font-bold text-gray-800">
+                  Contact Us
+                </h3>
+                <button
+                  onClick={() => setShowContactModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition"
+                >
                   <X size={20} />
                 </button>
               </div>
 
               <div className="space-y-4">
                 {/* Phone */}
-                <a href={`tel:${settings.phone}`} className="flex items-center gap-4 p-4 bg-green-50 rounded-xl hover:bg-green-100 transition group">
+                <a
+                  href={`tel:${settings.phone}`}
+                  className="flex items-center gap-4 p-4 bg-green-50 rounded-xl hover:bg-green-100 transition group"
+                >
                   <div className="p-3 bg-green-500 rounded-full">
                     <Phone className="text-white" size={20} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 font-medium">Call Us</p>
-                    <p className="text-base font-bold text-gray-800 group-hover:text-green-600 transition">{settings.phone}</p>
+                    <p className="text-xs text-gray-600 font-medium">
+                      Call Us
+                    </p>
+                    <p className="text-base font-bold text-gray-800 group-hover:text-green-600 transition">
+                      {settings.phone}
+                    </p>
                   </div>
                 </a>
 
                 {/* WhatsApp */}
-                <a href={`https://wa.me/${settings.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 p-4 bg-green-50 rounded-xl hover:bg-green-100 transition group">
+                <a
+                  href={`https://wa.me/${settings.whatsapp.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-4 p-4 bg-green-50 rounded-xl hover:bg-green-100 transition group"
+                >
                   <div className="p-3 bg-green-600 rounded-full">
                     <MessageCircle className="text-white" size={20} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 font-medium">WhatsApp</p>
-                    <p className="text-base font-bold text-gray-800 group-hover:text-green-600 transition">{settings.whatsapp}</p>
+                    <p className="text-xs text-gray-600 font-medium">
+                      WhatsApp
+                    </p>
+                    <p className="text-base font-bold text-gray-800 group-hover:text-green-600 transition">
+                      {settings.whatsapp}
+                    </p>
                   </div>
                 </a>
 
                 {/* Email */}
-                <a href={`mailto:${settings.email}`} className="flex items-center gap-4 p-4 bg-blue-50 rounded-xl hover:bg-blue-100 transition group">
+                <a
+                  href={`mailto:${settings.email}`}
+                  className="flex items-center gap-4 p-4 bg-blue-50 rounded-xl hover:bg-blue-100 transition group"
+                >
                   <div className="p-3 bg-blue-500 rounded-full">
                     <Mail className="text-white" size={20} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 font-medium">Email</p>
-                    <p className="text-sm font-bold text-gray-800 group-hover:text-blue-600 transition break-all">{settings.email}</p>
+                    <p className="text-xs text-gray-600 font-medium">
+                      Email
+                    </p>
+                    <p className="text-sm font-bold text-gray-800 group-hover:text-blue-600 transition break-all">
+                      {settings.email}
+                    </p>
                   </div>
                 </a>
 
@@ -241,8 +308,12 @@ export default function CakesPage() {
                     <MapPin className="text-white" size={20} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 font-medium">Location</p>
-                    <p className="text-sm font-bold text-gray-800">{settings.address}</p>
+                    <p className="text-xs text-gray-600 font-medium">
+                      Location
+                    </p>
+                    <p className="text-sm font-bold text-gray-800">
+                      {settings.address}
+                    </p>
                   </div>
                 </div>
 
@@ -252,28 +323,51 @@ export default function CakesPage() {
                     <Clock className="text-white" size={20} />
                   </div>
                   <div className="flex-1">
-                    <p className="text-xs text-gray-600 font-medium">Business Hours</p>
-                    <p className="text-sm font-bold text-gray-800">{settings.businessHours}</p>
+                    <p className="text-xs text-gray-600 font-medium">
+                      Business Hours
+                    </p>
+                    <p className="text-sm font-bold text-gray-800">
+                      {settings.businessHours}
+                    </p>
                   </div>
                 </div>
 
                 {/* Social Media */}
-                {(settings.socialMedia.facebook || settings.socialMedia.instagram || settings.socialMedia.twitter) && (
+                {(settings.socialMedia.facebook ||
+                  settings.socialMedia.instagram ||
+                  settings.socialMedia.twitter) && (
                   <div className="pt-4 border-t">
-                    <p className="text-xs text-gray-600 font-medium mb-3">Follow Us</p>
+                    <p className="text-xs text-gray-600 font-medium mb-3">
+                      Follow Us
+                    </p>
                     <div className="flex gap-3">
                       {settings.socialMedia.facebook && (
-                        <a href={settings.socialMedia.facebook} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-100 rounded-full hover:bg-blue-200 transition">
+                        <a
+                          href={settings.socialMedia.facebook}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-3 bg-blue-100 rounded-full hover:bg-blue-200 transition"
+                        >
                           <Facebook className="text-blue-600" size={20} />
                         </a>
                       )}
                       {settings.socialMedia.instagram && (
-                        <a href={settings.socialMedia.instagram} target="_blank" rel="noopener noreferrer" className="p-3 bg-pink-100 rounded-full hover:bg-pink-200 transition">
+                        <a
+                          href={settings.socialMedia.instagram}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-3 bg-pink-100 rounded-full hover:bg-pink-200 transition"
+                        >
                           <Instagram className="text-pink-600" size={20} />
                         </a>
                       )}
                       {settings.socialMedia.twitter && (
-                        <a href={settings.socialMedia.twitter} target="_blank" rel="noopener noreferrer" className="p-3 bg-blue-100 rounded-full hover:bg-blue-200 transition">
+                        <a
+                          href={settings.socialMedia.twitter}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-3 bg-blue-100 rounded-full hover:bg-blue-200 transition"
+                        >
                           <Twitter className="text-blue-500" size={20} />
                         </a>
                       )}
@@ -306,20 +400,30 @@ export default function CakesPage() {
             
             {/* Quick Contact Info Bar */}
             <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mt-4 text-sm">
-              <a href={`tel:${settings.phone}`} className="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition">
+              <a
+                href={`tel:${settings.phone}`}
+                className="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition"
+              >
                 <Phone size={16} />
                 <span className="font-medium">{settings.phone}</span>
               </a>
               <span className="text-gray-300">|</span>
-              <a href={`mailto:${settings.email}`} className="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition">
+              <a
+                href={`mailto:${settings.email}`}
+                className="flex items-center gap-2 text-gray-600 hover:text-pink-600 transition"
+              >
                 <Mail size={16} />
-                <span className="font-medium hidden sm:inline">{settings.email}</span>
+                <span className="font-medium hidden sm:inline">
+                  {settings.email}
+                </span>
                 <span className="font-medium sm:hidden">Email Us</span>
               </a>
               <span className="text-gray-300 hidden md:inline">|</span>
               <div className="flex items-center gap-2 text-gray-600 hidden md:flex">
                 <Clock size={16} />
-                <span className="font-medium">{settings.businessHours}</span>
+                <span className="font-medium">
+                  {settings.businessHours}
+                </span>
               </div>
             </div>
             
@@ -327,31 +431,53 @@ export default function CakesPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mt-6 max-w-5xl mx-auto">
               <div className="bg-white p-4 md:p-6 rounded-xl shadow-lg border-2 border-blue-200 hover:shadow-2xl transition-all transform hover:-translate-y-1">
                 <Package className="text-blue-600 mx-auto mb-2" size={28} />
-                <p className="text-2xl md:text-3xl font-bold text-blue-600">{stats.total}</p>
-                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">Total Cakes</p>
+                <p className="text-2xl md:text-3xl font-bold text-blue-600">
+                  {stats.total}
+                </p>
+                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">
+                  Total Cakes
+                </p>
               </div>
               <div className="bg-white p-4 md:p-6 rounded-xl shadow-lg border-2 border-yellow-200 hover:shadow-2xl transition-all transform hover:-translate-y-1">
                 <Star className="text-yellow-600 mx-auto mb-2 fill-current" size={28} />
-                <p className="text-2xl md:text-3xl font-bold text-yellow-600">{stats.featured}</p>
-                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">Featured</p>
+                <p className="text-2xl md:text-3xl font-bold text-yellow-600">
+                  {stats.featured}
+                </p>
+                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">
+                  Featured
+                </p>
               </div>
               <div className="bg-white p-4 md:p-6 rounded-xl shadow-lg border-2 border-red-200 hover:shadow-2xl transition-all transform hover:-translate-y-1">
                 <BadgePercent className="text-red-600 mx-auto mb-2" size={28} />
-                <p className="text-2xl md:text-3xl font-bold text-red-600">{stats.onSale}</p>
-                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">On Sale</p>
+                <p className="text-2xl md:text-3xl font-bold text-red-600">
+                  {stats.onSale}
+                </p>
+                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">
+                  On Sale
+                </p>
               </div>
               <div className="bg-white p-4 md:p-6 rounded-xl shadow-lg border-2 border-purple-200 hover:shadow-2xl transition-all transform hover:-translate-y-1">
                 <Flame className="text-purple-600 mx-auto mb-2" size={28} />
-                <p className="text-2xl md:text-3xl font-bold text-purple-600">{stats.popular}</p>
-                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">Popular</p>
+                <p className="text-2xl md:text-3xl font-bold text-purple-600">
+                  {stats.popular}
+                </p>
+                <p className="text-xs md:text-sm text-gray-600 font-medium mt-1">
+                  Popular
+                </p>
               </div>
             </div>
           </div>
           
           {/* Search Bar */}
-          <div className="max-w-3xl mx-auto mb-4 md:mb-6 animate-fade-in" style={{ animationDelay: '100ms' }}>
+          <div
+            className="max-w-3xl mx-auto mb-4 md:mb-6 animate-fade-in"
+            style={{ animationDelay: '100ms' }}
+          >
             <div className="relative">
-              <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <Search
+                className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                size={20}
+              />
               <input
                 type="text"
                 placeholder="Search by name, flavor, occasion..."
@@ -371,7 +497,10 @@ export default function CakesPage() {
           </div>
 
           {/* Filters Bar */}
-          <div className="bg-white rounded-xl md:rounded-2xl shadow-lg p-3 md:p-4 mb-4 md:mb-6 animate-fade-in" style={{ animationDelay: '200ms' }}>
+          <div
+            className="bg-white rounded-xl md:rounded-2xl shadow-lg p-3 md:p-4 mb-4 md:mb-6 animate-fade-in"
+            style={{ animationDelay: '200ms' }}
+          >
             {/* Mobile Filter Bar */}
             <div className="flex items-center justify-between gap-2 md:hidden">
               <div className="flex items-center gap-2 flex-1 overflow-x-auto scrollbar-hide">
@@ -399,13 +528,21 @@ export default function CakesPage() {
                 <div className="flex gap-1.5 flex-shrink-0">
                   <button
                     onClick={() => setViewMode('grid')}
-                    className={`p-2 rounded-lg transition ${viewMode === 'grid' ? 'bg-pink-100 text-pink-600' : 'bg-gray-100 text-gray-400'}`}
+                    className={`p-2 rounded-lg transition ${
+                      viewMode === 'grid'
+                        ? 'bg-pink-100 text-pink-600'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
                   >
                     <Grid size={16} />
                   </button>
                   <button
                     onClick={() => setViewMode('list')}
-                    className={`p-2 rounded-lg transition ${viewMode === 'list' ? 'bg-pink-100 text-pink-600' : 'bg-gray-100 text-gray-400'}`}
+                    className={`p-2 rounded-lg transition ${
+                      viewMode === 'list'
+                        ? 'bg-pink-100 text-pink-600'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}
                   >
                     <List size={16} />
                   </button>
@@ -419,11 +556,20 @@ export default function CakesPage() {
 
             {/* Mobile Sort Modal */}
             {showMobileSort && (
-              <div className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-end animate-fade-in" onClick={() => setShowMobileSort(false)}>
-                <div className="bg-white w-full rounded-t-3xl p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div
+                className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-end animate-fade-in"
+                onClick={() => setShowMobileSort(false)}
+              >
+                <div
+                  className="bg-white w-full rounded-t-3xl p-6 animate-slide-up"
+                  onClick={e => e.stopPropagation()}
+                >
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold">Sort By</h3>
-                    <button onClick={() => setShowMobileSort(false)} className="p-2">
+                    <button
+                      onClick={() => setShowMobileSort(false)}
+                      className="p-2"
+                    >
                       <X size={20} />
                     </button>
                   </div>
@@ -438,14 +584,18 @@ export default function CakesPage() {
                             setShowMobileSort(false);
                           }}
                           className={`w-full flex items-center gap-3 p-3 rounded-xl transition ${
-                            sortBy === option.value 
-                              ? 'bg-pink-100 text-pink-600 border-2 border-pink-300' 
+                            sortBy === option.value
+                              ? 'bg-pink-100 text-pink-600 border-2 border-pink-300'
                               : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                           }`}
                         >
                           <Icon size={18} />
-                          <span className="font-medium flex-1 text-left">{option.label}</span>
-                          {sortBy === option.value && <Zap size={16} className="text-pink-600" />}
+                          <span className="font-medium flex-1 text-left">
+                            {option.label}
+                          </span>
+                          {sortBy === option.value && (
+                            <Zap size={16} className="text-pink-600" />
+                          )}
                         </button>
                       );
                     })}
@@ -458,25 +608,42 @@ export default function CakesPage() {
             <div className="hidden md:flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
                 <p className="text-sm font-semibold text-gray-600">
-                  Showing <span className="text-pink-600 font-bold">{filteredCakes.length}</span> of <span className="font-bold">{cakes.length}</span> cakes
+                  Showing{' '}
+                  <span className="text-pink-600 font-bold">
+                    {filteredCakes.length}
+                  </span>{' '}
+                  of{' '}
+                  <span className="font-bold">
+                    {cakes.length}
+                  </span>{' '}
+                  cakes
                 </p>
                 {activeFiltersCount > 0 && (
                   <span className="bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-xs font-bold">
-                    {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active
+                    {activeFiltersCount} filter
+                    {activeFiltersCount > 1 ? 's' : ''} active
                   </span>
                 )}
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 rounded-lg transition ${viewMode === 'grid' ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-600'}`}
+                  className={`p-2 rounded-lg transition ${
+                    viewMode === 'grid'
+                      ? 'bg-pink-600 text-white'
+                      : 'bg-gray-100 text-gray-400 hover:text-gray-600'
+                  }`}
                   title="Grid View"
                 >
                   <Grid size={20} />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 rounded-lg transition ${viewMode === 'list' ? 'bg-pink-600 text-white' : 'bg-gray-100 text-gray-400 hover:text-gray-600'}`}
+                  className={`p-2 rounded-lg transition ${
+                    viewMode === 'list'
+                      ? 'bg-pink-600 text-white'
+                      : 'bg-gray-100 text-gray-400 hover:text-gray-600'
+                  }`}
                   title="List View"
                 >
                   <List size={20} />
@@ -485,9 +652,15 @@ export default function CakesPage() {
             </div>
 
             {/* Filters Content */}
-            <div className={`${showFilters ? 'block' : 'hidden md:block'} space-y-4 pt-4 md:pt-0 border-t md:border-0 mt-4 md:mt-0`}>
+            <div
+              className={`${
+                showFilters ? 'block' : 'hidden md:block'
+              } space-y-4 pt-4 md:pt-0 border-t md:border-0 mt-4 md:mt-0`}
+            >
               <div>
-                <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-3">Category</label>
+                <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2 md:mb-3">
+                  Category
+                </label>
                 <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
                   {CATEGORIES.map((category) => (
                     <button
@@ -507,10 +680,16 @@ export default function CakesPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                 <div>
-                  <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2">Price Range</label>
+                  <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2">
+                    Price Range
+                  </label>
                   <select
                     value={PRICE_RANGES.indexOf(priceRange)}
-                    onChange={(e) => setPriceRange(PRICE_RANGES[parseInt(e.target.value)])}
+                    onChange={(e) =>
+                      setPriceRange(
+                        PRICE_RANGES[parseInt(e.target.value, 10)]
+                      )
+                    }
                     className="w-full px-3 md:px-4 py-2 md:py-2.5 border-2 border-gray-200 rounded-lg focus:border-pink-500 focus:outline-none text-xs md:text-sm bg-white"
                   >
                     {PRICE_RANGES.map((range, index) => (
@@ -522,7 +701,9 @@ export default function CakesPage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2">Sort By</label>
+                  <label className="block text-xs md:text-sm font-semibold text-gray-700 mb-2">
+                    Sort By
+                  </label>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
@@ -550,21 +731,28 @@ export default function CakesPage() {
           </div>
         </div>
 
-        {/* Featured Cakes Section */}
-        {!searchQuery && featuredCakes.length > 0 && (
-          <div className="mb-8 md:mb-12 animate-fade-in" style={{ animationDelay: '300ms' }}>
+        {/* Featured Cakes Section (only when NO active filters/search) */}
+        {!hasActiveFilters && featuredCakes.length > 0 && (
+          <div
+            className="mb-8 md:mb-12 animate-fade-in"
+            style={{ animationDelay: '300ms' }}
+          >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2 md:gap-3">
                 <Star className="text-yellow-600 fill-current" size={24} />
-                <h2 className="text-xl md:text-2xl lg:text-3xl font-bold">Featured Cakes</h2>
+                <h2 className="text-xl md:text-2xl lg:text-3xl font-bold">
+                  Featured Cakes
+                </h2>
               </div>
-              <span className="text-sm text-gray-500 font-medium">{featuredCakes.length} items</span>
+              <span className="text-sm text-gray-500 font-medium">
+                {featuredCakes.length} items
+              </span>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
               {featuredCakes.map((cake, index) => (
                 <div 
-                  key={cake.id} 
+                  key={cake.id}
                   className="animate-fade-in hover:scale-105 transition-transform duration-300"
                   style={{ animationDelay: `${400 + index * 100}ms` }}
                 >
@@ -575,16 +763,21 @@ export default function CakesPage() {
           </div>
         )}
 
-        {/* Best Sellers Section */}
-        {!searchQuery && bestSellers.length > 0 && (
-          <div className="mb-8 md:mb-12 animate-fade-in" style={{ animationDelay: '500ms' }}>
+        {/* Best Sellers Section (only when NO active filters/search) */}
+        {!hasActiveFilters && bestSellers.length > 0 && (
+          <div
+            className="mb-8 md:mb-12 animate-fade-in"
+            style={{ animationDelay: '500ms' }}
+          >
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2 md:gap-3">
                 <TrendingUp className="text-pink-600" size={24} />
-                <h2 className="text-xl md:text-2xl lg:text-3xl font-bold">Best Sellers</h2>
+                <h2 className="text-xl md:text-2xl lg:text-3xl font-bold">
+                  Best Sellers
+                </h2>
               </div>
-              <Link 
-                href="/cakes?sort=popularity" 
+              <Link
+                href="/cakes?sort=popularity"
                 className="text-pink-600 font-semibold text-sm md:text-base hover:text-pink-700 transition flex items-center gap-1"
               >
                 View All
@@ -595,7 +788,7 @@ export default function CakesPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8">
               {bestSellers.map((cake, index) => (
                 <div 
-                  key={cake.id} 
+                  key={cake.id}
                   className="animate-fade-in hover:scale-105 transition-transform duration-300"
                   style={{ animationDelay: `${600 + index * 100}ms` }}
                 >
@@ -614,33 +807,47 @@ export default function CakesPage() {
                 {searchQuery ? (
                   <div className="mb-2">
                     <p className="text-sm md:text-base text-gray-700">
-                      Search results for <span className="font-bold text-pink-600">&quot;{searchQuery}&quot;</span>
+                      Search results for{' '}
+                      <span className="font-bold text-pink-600">
+                        &quot;{searchQuery}&quot;
+                      </span>
                     </p>
                   </div>
                 ) : (
                   <h2 className="text-xl md:text-2xl lg:text-3xl font-bold">
-                    {selectedCategory === 'All' ? 'All Cakes' : `${selectedCategory} Cakes`}
+                    {selectedCategory === 'All'
+                      ? 'All Cakes'
+                      : `${selectedCategory} Cakes`}
                   </h2>
                 )}
                 <p className="text-sm text-gray-500 mt-1">
-                  {filteredCakes.length} {filteredCakes.length === 1 ? 'cake' : 'cakes'} available
+                  {filteredCakes.length}{' '}
+                  {filteredCakes.length === 1 ? 'cake' : 'cakes'} available
                 </p>
               </div>
             </div>
             
-            <div className={
-              viewMode === 'grid' 
-                ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8' 
-                : 'space-y-6'
-            }>
-              {filteredCakes.map((cake, index) => (
-                <div 
-                  key={cake.id} 
-                  className={`${animateCards ? 'animate-fade-in' : 'opacity-0'} ${viewMode === 'grid' ? 'hover:scale-105 transition-transform duration-300' : ''}`}
+            <div
+              className={
+                viewMode === 'grid'
+                  ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 lg:gap-8'
+                  : 'space-y-6'
+              }
+            >
+              {mainCakes.map((cake, index) => (
+                <div
+                  key={cake.id}
+                  className={`${
+                    animateCards ? 'animate-fade-in' : 'opacity-0'
+                  } ${
+                    viewMode === 'grid'
+                      ? 'hover:scale-105 transition-transform duration-300'
+                      : ''
+                  }`}
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
-                  <CakeCard 
-                    cake={cake as Cake} 
+                  <CakeCard
+                    cake={cake as Cake}
                     variant="default"
                     index={index}
                   />
@@ -650,7 +857,9 @@ export default function CakesPage() {
 
             {filteredCakes.length >= 9 && (
               <div className="text-center mt-12 animate-fade-in">
-                <p className="text-gray-500 mb-4">Showing all {filteredCakes.length} cakes</p>
+                <p className="text-gray-500 mb-4">
+                  Showing all {filteredCakes.length} cakes
+                </p>
                 <button className="bg-gradient-to-r from-pink-600 to-purple-600 text-white px-8 py-4 rounded-full hover:from-pink-700 hover:to-purple-700 transition font-bold shadow-lg transform hover:scale-105 flex items-center gap-2 mx-auto">
                   <Eye size={20} />
                   Explore More Categories
@@ -661,12 +870,13 @@ export default function CakesPage() {
         ) : (
           <div className="text-center py-16 bg-white rounded-2xl shadow-lg animate-fade-in">
             <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">No cakes found</h3>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">
+              No cakes found
+            </h3>
             <p className="text-gray-500 text-lg mb-6 px-4">
-              {searchQuery 
+              {searchQuery
                 ? `No cakes matching "${searchQuery}"`
-                : 'Try adjusting your filters to see more results'
-              }
+                : 'Try adjusting your filters to see more results'}
             </p>
             <button
               onClick={handleClearFilters}
@@ -680,9 +890,12 @@ export default function CakesPage() {
         {/* Call to Action with Dynamic Contact */}
         <div className="mt-16 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 rounded-2xl p-8 md:p-12 text-center text-white shadow-2xl animate-fade-in">
           <Sparkles className="mx-auto mb-4 animate-bounce" size={40} />
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-4">Can&apos;t Find What You&lsquo;re Looking For?</h2>
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-bold mb-4">
+            Can&apos;t Find What You&lsquo;re Looking For?
+          </h2>
           <p className="text-pink-100 mb-8 text-lg max-w-2xl mx-auto">
-            Create your dream cake with our custom cake designer. Choose your flavors, design, and message!
+            Create your dream cake with our custom cake designer. Choose your
+            flavors, design, and message!
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link

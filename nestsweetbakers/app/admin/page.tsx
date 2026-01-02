@@ -34,28 +34,36 @@ interface Stats {
   totalProducts: number;
   totalOrders: number;
   pendingOrders: number;
-  totalRevenue: number;
+  totalRevenueINR: number;
+  totalRevenueCAD: number;
   customRequests: number;
   totalUsers: number;
   todayOrders: number;
-  todayRevenue: number;
+  todayRevenueINR: number;
+  todayRevenueCAD: number;
   newUsers: number;
-  averageOrderValue: number;
+  averageOrderValueINR: number;
+  averageOrderValueCAD: number;
 }
 
+
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<Stats>({
-    totalProducts: 0,
-    totalOrders: 0,
-    pendingOrders: 0,
-    totalRevenue: 0,
-    customRequests: 0,
-    totalUsers: 0,
-    todayOrders: 0,
-    todayRevenue: 0,
-    newUsers: 0,
-    averageOrderValue: 0,
-  });
+ const [stats, setStats] = useState<Stats>({
+  totalProducts: 0,
+  totalOrders: 0,
+  pendingOrders: 0,
+  totalRevenueINR: 0,
+  totalRevenueCAD: 0,
+  customRequests: 0,
+  totalUsers: 0,
+  todayOrders: 0,
+  todayRevenueINR: 0,
+  todayRevenueCAD: 0,
+  newUsers: 0,
+  averageOrderValueINR: 0,
+  averageOrderValueCAD: 0,
+});
+
   const [loading, setLoading] = useState(true);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
@@ -69,200 +77,226 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchDashboardData = async () => {
-    try {
-      const [productsSnap, ordersSnap, requestsSnap, usersSnap, reviewsSnap] =
-        await Promise.all([
-          getDocs(collection(db, 'products')),
-          getDocs(collection(db, 'orders')),
-          getDocs(collection(db, 'customRequests')),
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'reviews')),
-        ]);
+  try {
+    const [productsSnap, ordersSnap, requestsSnap, usersSnap, reviewsSnap] =
+      await Promise.all([
+        getDocs(collection(db, 'products')),
+        getDocs(collection(db, 'orders')),
+        getDocs(collection(db, 'customRequests')),
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'reviews')),
+      ]);
 
-      const orders = ordersSnap.docs.map((doc) => ({
+    const orders = ordersSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    const products = productsSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    const users = usersSnap.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    // Pending orders
+    const pendingCount = orders.filter(
+      (o: any) => o.status === 'pending'
+    ).length;
+
+    // Total revenue split by currency
+    let totalRevenueINR = 0;
+    let totalRevenueCAD = 0;
+
+    orders.forEach((o: any) => {
+      const amount = o.total ?? o.totalAmount ?? 0;
+      const currency = (o.currency || 'INR') as 'INR' | 'CAD';
+      if (currency === 'CAD') totalRevenueCAD += amount;
+      else totalRevenueINR += amount;
+    });
+
+    // Today's stats
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const todayOrdersArr = orders.filter((o: any) => {
+      const createdAt = o.createdAt?.toDate
+        ? o.createdAt.toDate()
+        : new Date(o.createdAt);
+      return createdAt >= today;
+    });
+
+    let todayRevenueINR = 0;
+    let todayRevenueCAD = 0;
+
+    todayOrdersArr.forEach((o: any) => {
+      const amount = o.total ?? o.totalAmount ?? 0;
+      const currency = (o.currency || 'INR') as 'INR' | 'CAD';
+      if (currency === 'CAD') todayRevenueCAD += amount;
+      else todayRevenueINR += amount;
+    });
+
+    // New users (last 7 days)
+    const lastWeek = new Date();
+    lastWeek.setDate(lastWeek.getDate() - 7);
+    const newUsers = users.filter((u: any) => {
+      const joinDate = u.createdAt?.toDate
+        ? u.createdAt.toDate()
+        : new Date(u.createdAt);
+      return joinDate >= lastWeek;
+    }).length;
+
+    // Average order value per currency
+    const ordersINR = orders.filter(
+      (o: any) => (o.currency || 'INR') === 'INR'
+    );
+    const ordersCAD = orders.filter(
+      (o: any) => o.currency === 'CAD'
+    );
+
+    const avgOrderValueINR =
+      ordersINR.length > 0 ? totalRevenueINR / ordersINR.length : 0;
+    const avgOrderValueCAD =
+      ordersCAD.length > 0 ? totalRevenueCAD / ordersCAD.length : 0;
+
+    // Recent orders (normalized fields)
+    const recentOrdersQuery = query(
+      collection(db, 'orders'),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+    const recentOrdersSnap = await getDocs(recentOrdersQuery);
+    const recent = recentOrdersSnap.docs.map((doc) => {
+      const data = doc.data() as any;
+      const createdAt = data.createdAt?.toDate
+        ? data.createdAt.toDate()
+        : new Date(data.createdAt);
+      const displayName =
+        data.customerName ||
+        data.userName ||
+        data.customerInfo?.name ||
+        'Customer';
+      const displayEmail =
+        data.customerEmail ||
+        data.userEmail ||
+        data.customerInfo?.email ||
+        '';
+      const displayTotal = data.total ?? data.totalAmount ?? 0;
+      const displayCurrency = (data.currency || 'INR') as 'INR' | 'CAD';
+
+      return {
         id: doc.id,
-        ...doc.data(),
-      }));
-      const products = productsSnap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      const users = usersSnap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+        ...data,
+        createdAt,
+        displayName,
+        displayEmail,
+        displayTotal,
+        displayCurrency,
+      };
+    });
 
-      // Pending orders
-      const pendingCount = orders.filter(
-        (o: any) => o.status === 'pending'
-      ).length;
-
-      // Total revenue (use total, fall back to totalAmount)
-      const totalRevenue = orders.reduce((sum: number, o: any) => {
-        const amount = o.total ?? o.totalAmount ?? 0;
-        return sum + amount;
-      }, 0);
-
-      // Today's stats
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayOrdersArr = orders.filter((o: any) => {
-        const createdAt = o.createdAt?.toDate
-          ? o.createdAt.toDate()
-          : new Date(o.createdAt);
-        return createdAt >= today;
+    // Top products by item count in orders.items[]
+    const productOrderCount = new Map<string, number>();
+    orders.forEach((order: any) => {
+      const items = order.items || [];
+      items.forEach((item: any) => {
+        if (item.cakeId) {
+          const qty = item.quantity ?? 1;
+          productOrderCount.set(
+            item.cakeId,
+            (productOrderCount.get(item.cakeId) || 0) + qty
+          );
+        }
       });
-      const todayRevenue = todayOrdersArr.reduce((sum: number, o: any) => {
-        const amount = o.total ?? o.totalAmount ?? 0;
-        return sum + amount;
-      }, 0);
+    });
 
-      // New users (last 7 days)
-      const lastWeek = new Date();
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      const newUsers = users.filter((u: any) => {
-        const joinDate = u.createdAt?.toDate
-          ? u.createdAt.toDate()
-          : new Date(u.createdAt);
-        return joinDate >= lastWeek;
-      }).length;
+    const topProds = products
+      .map((p: any) => ({
+        ...p,
+        orderCount: productOrderCount.get(p.id) || 0,
+      }))
+      .sort((a, b) => b.orderCount - a.orderCount)
+      .slice(0, 5);
 
-      // Average order value
-      const avgOrderValue =
-        orders.length > 0 ? totalRevenue / orders.length : 0;
-
-      // Recent orders (normalized fields)
-      const recentOrdersQuery = query(
-        collection(db, 'orders'),
-        orderBy('createdAt', 'desc'),
-        limit(5)
-      );
-      const recentOrdersSnap = await getDocs(recentOrdersQuery);
-      const recent = recentOrdersSnap.docs.map((doc) => {
-        const data = doc.data() as any;
-        const createdAt = data.createdAt?.toDate
-          ? data.createdAt.toDate()
-          : new Date(data.createdAt);
-        const displayName =
-          data.customerName ||
-          data.userName ||
-          data.customerInfo?.name ||
-          'Customer';
-        const displayEmail =
-          data.customerEmail ||
-          data.userEmail ||
-          data.customerInfo?.email ||
-          '';
-        const displayTotal = data.total ?? data.totalAmount ?? 0;
-
+    // Recent activities (orders + reviews)
+    const activities = [
+      ...recent.slice(0, 3).map((order: any) => ({
+        type: 'order',
+        message: `New order from ${
+          order.displayName ||
+          order.customerName ||
+          order.userName ||
+          'Customer'
+        }`,
+        time: order.createdAt,
+        icon: ShoppingCart,
+        color: 'bg-green-100 text-green-600',
+      })),
+      ...reviewsSnap.docs.slice(0, 2).map((doc: any) => {
+        const review = doc.data();
+        const time = review.createdAt;
         return {
-          id: doc.id,
-          ...data,
-          createdAt,
-          displayName,
-          displayEmail,
-          displayTotal,
-        };
-      });
-
-      // Top products by item count in orders.items[]
-      const productOrderCount = new Map<string, number>();
-      orders.forEach((order: any) => {
-        const items = order.items || [];
-        items.forEach((item: any) => {
-          if (item.cakeId) {
-            const qty = item.quantity ?? 1;
-            productOrderCount.set(
-              item.cakeId,
-              (productOrderCount.get(item.cakeId) || 0) + qty
-            );
-          }
-        });
-      });
-
-      const topProds = products
-        .map((p: any) => ({
-          ...p,
-          orderCount: productOrderCount.get(p.id) || 0,
-        }))
-        .sort((a, b) => b.orderCount - a.orderCount)
-        .slice(0, 5);
-
-      // Recent activities (orders + reviews)
-      const activities = [
-        ...recent.slice(0, 3).map((order: any) => ({
-          type: 'order',
-          message: `New order from ${
-            order.displayName ||
-            order.customerName ||
-            order.userName ||
-            'Customer'
+          type: 'review',
+          message: `New review: ${review.rating}⭐ from ${
+            review.userName || 'Customer'
           }`,
-          time: order.createdAt,
-          icon: ShoppingCart,
-          color: 'bg-green-100 text-green-600',
-        })),
-        ...reviewsSnap.docs.slice(0, 2).map((doc: any) => {
-          const review = doc.data();
-          const time = review.createdAt;
-          return {
-            type: 'review',
-            message: `New review: ${review.rating}⭐ from ${
-              review.userName || 'Customer'
-            }`,
-            time,
-            icon: Star,
-            color: 'bg-yellow-100 text-yellow-600',
-          };
-        }),
-      ]
-        .sort((a, b) => {
-          const timeA = a.time?.toDate
-            ? a.time.toDate()
-            : new Date(a.time);
-          const timeB = b.time?.toDate
-            ? b.time.toDate()
-            : new Date(b.time);
-          return timeB.getTime() - timeA.getTime();
-        })
-        .slice(0, 5);
+          time,
+          icon: Star,
+          color: 'bg-yellow-100 text-yellow-600',
+        };
+      }),
+    ]
+      .sort((a, b) => {
+        const timeA = a.time?.toDate
+          ? a.time.toDate()
+          : new Date(a.time);
+        const timeB = b.time?.toDate
+          ? b.time.toDate()
+          : new Date(b.time);
+        return timeB.getTime() - timeA.getTime();
+      })
+      .slice(0, 5);
 
-      setStats({
-        totalProducts: productsSnap.size,
-        totalOrders: ordersSnap.size,
-        pendingOrders: pendingCount,
-        totalRevenue: totalRevenue,
-        customRequests: requestsSnap.size,
-        totalUsers: usersSnap.size,
-        todayOrders: todayOrdersArr.length,
-        todayRevenue: todayRevenue,
-        newUsers: newUsers,
-        averageOrderValue: avgOrderValue,
-      });
+    setStats({
+      totalProducts: productsSnap.size,
+      totalOrders: ordersSnap.size,
+      pendingOrders: pendingCount,
+      totalRevenueINR,
+      totalRevenueCAD,
+      customRequests: requestsSnap.size,
+      totalUsers: usersSnap.size,
+      todayOrders: todayOrdersArr.length,
+      todayRevenueINR,
+      todayRevenueCAD,
+      newUsers,
+      averageOrderValueINR: avgOrderValueINR,
+      averageOrderValueCAD: avgOrderValueCAD,
+    });
 
-      setRecentOrders(recent);
-      setRecentActivities(activities);
-      setTopProducts(topProds);
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setRecentOrders(recent);
+    setRecentActivities(activities);
+    setTopProducts(topProds);
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const statCards = [
     {
-      title: 'Total Revenue',
-      value: `₹${stats.totalRevenue.toLocaleString()}`,
-      subtitle: `Avg: ₹${Math.round(
-        stats.averageOrderValue
-      ).toLocaleString()}`,
-      icon: DollarSign,
-      color: 'from-purple-500 to-purple-600',
-      trend: '+12.5%',
-      trendUp: true,
-      link: '/admin/orders',
-    },
+  title: 'Total Revenue',
+  value: `₹${stats.totalRevenueINR.toLocaleString()} / CA$${stats.totalRevenueCAD.toLocaleString()}`,
+  subtitle: `Avg: ₹${Math.round(stats.averageOrderValueINR).toLocaleString()} / CA$${Math.round(stats.averageOrderValueCAD).toLocaleString()}`,
+  icon: DollarSign,
+  color: 'from-purple-500 to-purple-600',
+  trend: '+12.5%',
+  trendUp: true,
+  link: '/admin/orders',
+},
+
     {
       title: 'Total Orders',
       value: stats.totalOrders,
@@ -521,9 +555,11 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="text-right flex-shrink-0 ml-4">
-                    <p className="font-bold text-gray-800 text-lg mb-1">
-                      ₹{order.displayTotal.toLocaleString()}
-                    </p>
+                   <p className="font-bold text-gray-800 text-lg mb-1">
+  {order.displayCurrency === 'CAD' ? 'CA$' : '₹'}
+  {order.displayTotal.toLocaleString()}
+</p>
+
                     <span
                       className={`text-xs px-3 py-1 rounded-full font-medium ${getStatusColor(
                         order.status
@@ -643,9 +679,11 @@ export default function AdminDashboard() {
                   <p className="text-xs text-gray-600">
                     {product.orderCount} orders
                   </p>
-                  <p className="text-sm font-bold text-pink-600">
-                    ₹{product.basePrice}
-                  </p>
+                 <p className="text-sm font-bold text-pink-600">
+  {product.currency === 'CAD' ? 'CA$' : '₹'}
+  {product.basePrice}
+</p>
+
                 </div>
               </Link>
             ))}

@@ -38,12 +38,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [stats, setStats] = useState({
-    pendingOrders: 0,
-    pendingRequests: 0,
-    pendingReviews: 0,
-    todayOrders: 0,
-    todayRevenue: 0,
-  });
+  pendingOrders: 0,
+  pendingRequests: 0,
+  pendingReviews: 0,
+  todayOrders: 0,
+  todayRevenueINR: 0,
+  todayRevenueCAD: 0,
+});
+
 
   // Real-time stats
   useEffect(() => {
@@ -92,19 +94,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       );
       
       const ordersSnap = await getDocs(todayOrdersQuery);
-      let revenue = 0;
-      ordersSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.status === 'completed') {
-          revenue += data.totalPrice || 0;
-        }
-      });
+      let revenueINR = 0;
+let revenueCAD = 0;
 
-      setStats(prev => ({
-        ...prev,
-        todayOrders: ordersSnap.size,
-        todayRevenue: revenue
-      }));
+ordersSnap.forEach(doc => {
+  const data = doc.data();
+  if (data.status === 'completed') {
+    const amount = data.total ?? data.totalAmount ?? data.totalPrice ?? 0;
+    const currency = (data.currency || 'INR') as 'INR' | 'CAD';
+    if (currency === 'CAD') revenueCAD += amount;
+    else revenueINR += amount;
+  }
+});
+
+setStats(prev => ({
+  ...prev,
+  todayOrders: ordersSnap.size,
+  todayRevenueINR: revenueINR,
+  todayRevenueCAD: revenueCAD,
+}));
+
     };
 
     fetchTodayStats();
@@ -255,12 +264,21 @@ if (!user || (!isAdmin && !isSuperAdmin)) {
                 <p className="text-lg font-bold">{stats.todayOrders}</p>
               </div>
               <div className="bg-white/20 backdrop-blur-sm rounded-lg p-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign size={14} />
-                  <span className="text-xs font-semibold">Revenue</span>
-                </div>
-                <p className="text-lg font-bold">₹{stats.todayRevenue}</p>
-              </div>
+  <div className="flex items-center gap-2 mb-1">
+    <DollarSign size={14} />
+    <span className="text-xs font-semibold">Revenue</span>
+  </div>
+  <div className="text-[11px] leading-tight font-semibold">
+    <p>
+      ₹{stats.todayRevenueINR.toLocaleString('en-IN')}
+      <span className="ml-1 text-[10px] opacity-80">INR</span>
+    </p>
+    <p>
+      CA${stats.todayRevenueCAD.toLocaleString('en-CA')}
+      <span className="ml-1 text-[10px] opacity-80">CAD</span>
+    </p>
+  </div>
+</div>
             </div>
 
             {isSuperAdmin && (

@@ -17,7 +17,13 @@ import {
   CreditCard, Clock, Gift, Percent, Info, Copy, Check,
   X, Sparkles, FileText, Zap, LogIn
 } from 'lucide-react';
-
+type PromoConfig = {
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  minOrder: number;
+  active?: boolean;
+};
 interface CustomerInfo {
   name: string;
   phone: string;
@@ -44,6 +50,8 @@ interface ExtendedSettings {
   taxRate?: number;
   enableCOD?: boolean;
   enableOnlinePayment?: boolean;
+   allowedPincodes?: string;             // e.g. "133001,133002,133003"
+  promoCodes?: PromoConfig[];           // configured by admin in settings
   [key: string]: any;
 }
 
@@ -82,7 +90,16 @@ export default function CartPage() {
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [orderNote, setOrderNote] = useState('');
   const [copied, setCopied] = useState(false);
+const allowedPincodes =
+  (settings.allowedPincodes || '')
+    .split(',')
+    .map(p => p.trim())
+    .filter(Boolean);
 
+const availablePromos: PromoConfig[] = Array.isArray(settings.promoCodes)
+  ? (settings.promoCodes as PromoConfig[])
+  : [];
+  
   const fetchUserProfile = useCallback(async () => {
     if (!user) {
       setLoadingProfile(false);
@@ -139,81 +156,90 @@ export default function CartPage() {
   const finalTotal = totalPrice + deliveryFee + tax + packagingFee - discount;
 
   const validateForm = (): boolean => {
-    if (!customerInfo.name.trim()) {
-      showError('Please enter your name');
-      return false;
-    }
-    if (!customerInfo.phone.trim() || customerInfo.phone.length < 10) {
-      showError('Please enter a valid phone number');
-      return false;
-    }
-    if (!customerInfo.address.trim()) {
-      showError('Please enter delivery address');
-      return false;
-    }
-    if (!customerInfo.pincode.trim()) {
-      showError('Please enter pincode');
-      return false;
-    }
-    if (!customerInfo.deliveryDate) {
-      showError('Please select delivery date');
-      return false;
-    }
-    if (!acceptTerms) {
-      showError('Please accept terms and conditions');
-      return false;
-    }
+  if (!customerInfo.name.trim()) {
+    showError('Please enter your name');
+    return false;
+  }
+  if (!customerInfo.phone.trim() || customerInfo.phone.length < 10) {
+    showError('Please enter a valid phone number');
+    return false;
+  }
+  if (!customerInfo.address.trim()) {
+    showError('Please enter delivery address');
+    return false;
+  }
+  if (!customerInfo.pincode.trim()) {
+    showError('Please enter pincode');
+    return false;
+  }
 
-    const selectedDate = new Date(customerInfo.deliveryDate);
-    const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 2);
-    minDate.setHours(0, 0, 0, 0);
+  // ✅ Block if pincode is not in allowed list
+  const pin = customerInfo.pincode.trim();
+  if (allowedPincodes.length > 0 && !allowedPincodes.includes(pin)) {
+    showError('Sorry, delivery is not available for this pincode. Please enter a serviceable pincode.');
+    return false;
+  }
 
-    if (selectedDate < minDate) {
-      showError('Minimum 2 days advance order required');
-      return false;
-    }
+  if (!customerInfo.deliveryDate) {
+    showError('Please select delivery date');
+    return false;
+  }
+  if (!acceptTerms) {
+    showError('Please accept terms and conditions');
+    return false;
+  }
 
-    return true;
-  };
+  const selectedDate = new Date(customerInfo.deliveryDate);
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + 2);
+  minDate.setHours(0, 0, 0, 0);
+
+  if (selectedDate < minDate) {
+    showError('Minimum 2 days advance order required');
+    return false;
+  }
+
+  return true;
+};
+
 
   const applyPromoCode = () => {
-    if (!promoCode.trim()) {
-      showError('Please enter a promo code');
-      return;
-    }
+  if (!promoCode.trim()) {
+    showError('Please enter a promo code');
+    return;
+  }
 
-    const code = promoCode.toUpperCase();
-    
-    const promoCodes: { [key: string]: { type: 'percentage' | 'fixed'; value: number; minOrder: number } } = {
-      'FIRST10': { type: 'percentage', value: 10, minOrder: 500 },
-      'SAVE50': { type: 'fixed', value: 50, minOrder: 300 },
-      'SAVE100': { type: 'fixed', value: 100, minOrder: 1000 },
-      'WELCOME15': { type: 'percentage', value: 15, minOrder: 500 },
-      'NEWYEAR25': { type: 'percentage', value: 25, minOrder: 1500 },
-      'SWEET20': { type: 'percentage', value: 20, minOrder: 800 },
-    };
+  if (availablePromos.length === 0) {
+    showInfo('No active promo codes available right now.');
+    return;
+  }
 
-    if (promoCodes[code]) {
-      const promo = promoCodes[code];
-      
-      if (totalPrice < promo.minOrder) {
-        showError(`Minimum order of ${currencySymbol}${promo.minOrder} required for this promo`);
-        return;
-      }
+  const code = promoCode.toUpperCase();
+  const promo = availablePromos.find(
+    p => p.code.toUpperCase() === code && p.active !== false
+  );
 
-      const discountValue = promo.type === 'percentage' 
-        ? (totalPrice * promo.value) / 100
-        : promo.value;
-      
-      setDiscount(discountValue);
-      setAppliedPromo(code);
-      showSuccess(`🎉 Promo code applied! You saved ${currencySymbol}${discountValue.toFixed(2)}`);
-      setShowPromo(false);
-    } else {
-      showError('Invalid or expired promo code');
-    }
-  };
+  if (!promo) {
+    showError('Invalid or expired promo code');
+    return;
+  }
+
+  if (totalPrice < promo.minOrder) {
+    showError(`Minimum order of ${currencySymbol}${promo.minOrder} required for this promo`);
+    return;
+  }
+
+  const discountValue =
+    promo.type === 'percentage'
+      ? (totalPrice * promo.value) / 100
+      : promo.value;
+
+  setDiscount(discountValue);
+  setAppliedPromo(code);
+  showSuccess(`🎉 Promo code applied! You saved ${currencySymbol}${discountValue.toFixed(2)}`);
+  setShowPromo(false);
+};
+
 
   const removePromo = () => {
     setDiscount(0);

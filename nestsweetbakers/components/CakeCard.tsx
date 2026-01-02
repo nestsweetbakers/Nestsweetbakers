@@ -3,6 +3,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Cake } from '@/lib/types';
+import { useSettings } from '@/hooks/useSettings';
+
 import { 
   Star, 
   ShoppingCart, 
@@ -41,6 +43,7 @@ export default function CakeCard({ cake, showBadge = false, variant = 'default',
   const { addToCart } = useCart();
   const { showSuccess, showInfo, showError } = useToast();
   const router = useRouter();
+   const { currencySymbol } = useSettings(); 
   const [isFavorite, setIsFavorite] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -464,51 +467,54 @@ export default function CakeCard({ cake, showBadge = false, variant = 'default',
             </div>
           )}
 
-          {/* Price Section - Enhanced */}
-          <div className="mb-4 p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl border-2 border-pink-200">
-            <div className="flex items-end justify-between">
-              <div className="flex-1">
-                {discount > 0 ? (
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-3xl font-black text-pink-600">
-                        ₹{discountedPrice.toFixed(2)}
-                      </span>
-                      <span className="text-lg text-gray-400 line-through font-semibold">
-                        ₹{originalPrice}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs text-gray-600 font-medium">per kg</span>
-                      <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full font-bold flex items-center gap-1">
-                        <Check size={12} />
-                        Save ₹{savings.toFixed(2)}
-                      </span>
-                      <span className="text-xs bg-red-500 text-white px-2 py-1 rounded-full font-bold animate-pulse">
-                        {discount}% OFF
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <span className="text-3xl font-black text-pink-600">₹{originalPrice}</span>
-                    <span className="text-gray-500 text-sm ml-2 font-medium">per kg</span>
-                  </div>
-                )}
-              </div>
-              
-              {/* Order Count Badge */}
-              {cake.orderCount && cake.orderCount > 5 && (
-                <div className="flex flex-col items-end">
-                  <span className="text-xs bg-blue-500 text-white px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-md">
-                    <Package size={12} />
-                    {cake.orderCount}+
-                  </span>
-                  <span className="text-xs text-gray-500 mt-1 font-medium">orders</span>
-                </div>
-              )}
-            </div>
+         {/* Price Section - Enhanced */}
+<div className="mb-4 p-4 bg-gradient-to-r from-pink-50 to-purple-50 rounded-xl border-2 border-pink-200">
+  <div className="flex items-end justify-between">
+    <div className="flex-1">
+      {discount > 0 ? (
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-3xl font-black text-pink-600">
+              {currencySymbol}{discountedPrice.toFixed(2)}
+            </span>
+            <span className="text-lg text-gray-400 line-through font-semibold">
+              {currencySymbol}{originalPrice}
+            </span>
           </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-600 font-medium">per kg</span>
+            <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full font-bold flex items-center gap-1">
+              <Check size={12} />
+              Save {currencySymbol}{savings.toFixed(2)}
+            </span>
+            <span className="text-xs bg-red-500 text-white px-2 py-1 rounded-full font-bold animate-pulse">
+              {discount}% OFF
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <span className="text-3xl font-black text-pink-600">
+            {currencySymbol}{originalPrice}
+          </span>
+          <span className="text-gray-500 text-sm ml-2 font-medium">per kg</span>
+        </div>
+      )}
+    </div>
+
+    {/* Order Count Badge remains the same */}
+    {cake.orderCount && cake.orderCount > 5 && (
+      <div className="flex flex-col items-end">
+        <span className="text-xs bg-blue-500 text-white px-3 py-1.5 rounded-full font-bold flex items-center gap-1 shadow-md">
+          <Package size={12} />
+          {cake.orderCount}+
+        </span>
+        <span className="text-xs text-gray-500 mt-1 font-medium">orders</span>
+      </div>
+    )}
+  </div>
+</div>
+
 
           {/* Features List */}
           <div className="flex items-center justify-between text-xs text-gray-600 mb-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
